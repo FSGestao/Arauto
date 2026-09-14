@@ -51,7 +51,7 @@ interface ServiceProgress {
 }
 
 interface LiveState {
-  mode: "idle" | "lyrics" | "announcement" | "media";
+  mode: "idle" | "lyrics" | "announcement" | "media" | "countdown";
   song: Song | null;
   lyricIndex: number;
   isPlaying: boolean;
@@ -59,6 +59,8 @@ interface LiveState {
   announcement: Announcement | null;
   media: MediaItem | null;
   nextMedia: string | null;
+  countdownEndsAt: number | null;
+  countdownTitle: string | null;
   service: ServiceProgress | null;
   volume: number;
   background: string | null;
@@ -74,11 +76,23 @@ const EMPTY_STATE: LiveState = {
   announcement: null,
   media: null,
   nextMedia: null,
+  countdownEndsAt: null,
+  countdownTitle: null,
   service: null,
   volume: 1,
   background: null,
   mediaPaused: false,
 };
+
+/** Formata milissegundos restantes como mm:ss ou h:mm:ss. */
+function formatCountdown(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 const FADE_MS = 450;
 
@@ -128,6 +142,13 @@ export default function ProjectionPage() {
     const interval = setInterval(() => setTick((t) => t + 1), 150);
     return () => clearInterval(interval);
   }, [state.isPlaying, state.mode]);
+
+  // ─── Contagem regressiva: re-renderiza a cada segundo ──
+  useEffect(() => {
+    if (state.mode !== "countdown") return;
+    const interval = setInterval(() => setTick((t) => t + 1), 250);
+    return () => clearInterval(interval);
+  }, [state.mode]);
 
   // ─── Navegação do roteiro (Culto) pelo teclado/mouse ──
   // Setas ←/→ e clique avançam/voltam no culto em apresentação. "F" alterna
@@ -331,6 +352,25 @@ export default function ProjectionPage() {
         }}
       >
         {state.mode === "idle" && !state.background && brandBlock}
+
+        {state.mode === "countdown" && state.countdownEndsAt && (
+          <div style={{ textAlign: "center", textShadow }}>
+            {state.countdownTitle && (
+              <p style={{ fontSize: "clamp(1.1rem, 3vw, 2.2rem)", opacity: 0.85, marginBottom: "3vh" }}>{state.countdownTitle}</p>
+            )}
+            <p
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: "clamp(3rem, 14vw, 12rem)",
+                fontWeight: 800,
+                fontVariantNumeric: "tabular-nums",
+                lineHeight: 1,
+              }}
+            >
+              {formatCountdown(state.countdownEndsAt - Date.now())}
+            </p>
+          </div>
+        )}
 
         {state.mode === "lyrics" && currentLine && (
           <div key={state.lyricIndex} className="projection-lyric" style={{ textShadow }}>

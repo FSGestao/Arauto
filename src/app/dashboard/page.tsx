@@ -73,7 +73,7 @@ interface ServiceProgress {
 }
 
 interface LiveState {
-  mode: "idle" | "lyrics" | "announcement" | "media";
+  mode: "idle" | "lyrics" | "announcement" | "media" | "countdown";
   song: Song | null;
   lyricIndex: number;
   isPlaying: boolean;
@@ -81,6 +81,8 @@ interface LiveState {
   announcement: Announcement | null;
   media: MediaItem | null;
   nextMedia: string | null;
+  countdownEndsAt: number | null;
+  countdownTitle: string | null;
   service: ServiceProgress | null;
   interjecting: boolean;
   volume: number;
@@ -117,8 +119,20 @@ const STEP_LABEL: Record<string, string> = {
   lyrics: "Música",
   announcement: "Aviso",
   media: "Mídia",
+  countdown: "Contagem regressiva",
   idle: "Tela limpa",
 };
+
+/** Formata milissegundos restantes como mm:ss ou h:mm:ss — usado tanto no
+ * painel do operador quanto (via a mesma lógica) na tela de projeção. */
+function formatCountdown(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 /** Formata segundos como m:ss (usado na barra de progresso da mídia). */
 function formatTime(seconds: number): string {
@@ -170,6 +184,8 @@ export default function DashboardPage() {
     announcement: null,
     media: null,
     nextMedia: null,
+    countdownEndsAt: null,
+    countdownTitle: null,
     interjecting: false,
     volume: 1,
     background: null,
@@ -304,6 +320,17 @@ export default function DashboardPage() {
     return () => window.removeEventListener("keydown", handleGlobalKey);
   }, []);
 
+  // ─── Contagem regressiva: força re-render a cada segundo ──
+  // O servidor só manda o instante em que termina (countdownEndsAt); cada
+  // tela calcula "quanto falta" sozinha, sem depender de mensagens a cada
+  // segundo vindas do servidor.
+  const [, setCountdownTick] = useState(0);
+  useEffect(() => {
+    if (live.mode !== "countdown") return;
+    const interval = setInterval(() => setCountdownTick((t) => t + 1), 250);
+    return () => clearInterval(interval);
+  }, [live.mode]);
+
   // ─── Apply brand theme ────────────────────────────────
   useEffect(() => {
     if (!settings) return;
@@ -356,6 +383,15 @@ export default function DashboardPage() {
   }
   function setBackground(file: string | null) {
     socketRef.current?.emit("admin:setBackground", file);
+  }
+
+  // ─── Contagem regressiva ──────────────────────────────
+  function startCountdown(seconds: number, title: string) {
+    if (!(seconds > 0)) return;
+    socketRef.current?.emit("admin:startCountdown", { seconds, title });
+  }
+  function stopCountdown() {
+    socketRef.current?.emit("admin:stopCountdown");
   }
 
   // Corrige a linha que está no ar AGORA, sem sair da apresentação: atualiza
@@ -692,6 +728,16 @@ export default function DashboardPage() {
               </div>
             )}
 
+            {/* Contagem regressiva — funciona com ou sem um culto em
+                apresentação (útil até antes do culto começar). */}
+            <CountdownControl
+              active={live.mode === "countdown"}
+              endsAt={live.countdownEndsAt}
+              title={live.countdownTitle}
+              onStart={startCountdown}
+              onStop={stopCountdown}
+            />
+
             {live.service && (
               <div
                 className="glass-card p-md mb-lg"
@@ -849,8 +895,18 @@ export default function DashboardPage() {
                         {live.mode === "lyrics" && (live.song?.title || "—")}
                         {live.mode === "announcement" && (live.announcement?.title || "—")}
                         {live.mode === "media" && (live.media?.title || "—")}
+                        {live.mode === "countdown" && "⏱ Contagem regressiva"}
                         {live.mode === "idle" && "Tela em branco"}
                       </p>
+
+                      {live.mode === "countdown" && live.countdownEndsAt && (
+                        <div style={{ marginBottom: 12 }}>
+                          <p style={{ fontSize: "2rem", fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+                            {formatCountdown(live.countdownEndsAt - Date.now())}
+                          </p>
+                          {live.countdownTitle && <p style={{ color: "var(--text-secondary)" }}>{live.countdownTitle}</p>}
+                        </div>
+                      )}
 
                       {currentLyricText && (
                         <>
@@ -1096,6 +1152,7 @@ export default function DashboardPage() {
                     {live.mode === "idle" && "Tela em branco"}
                     {live.mode === "lyrics" && (live.song?.title || "—")}
                     {live.mode === "announcement" && (live.announcement?.title || "—")}
+                    {live.mode === "countdown" && "⏱ Contagem regressiva (veja o painel acima)"}
                   </p>
                   {currentLyricText && (
                     <EditableCurrentLine text={currentLyricText} onSave={editCurrentLine} style={{ marginBottom: 16 }} />
@@ -1845,6 +1902,83 @@ function GlobalSearch({
             ))
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Contagem regressiva — funciona independente de ter um culto em apresentação
+ * (ex.: "entra em 5 minutos", antes de qualquer coisa começar). Quando ativa,
+ * mostra o relógio rodando e um botão de parar; quando não, o formulário
+ * pra escolher duração e uma mensagem opcional.
+ */
+function CountdownControl({
+  active,
+  endsAt,
+  title,
+  onStart,
+  onStop,
+}: {
+  active: boolean;
+  endsAt: number | null;
+  title: string | null;
+  onStart: (seconds: number, title: string) => void;
+  onStop: () => void;
+}) {
+  const [minutes, setMinutes] = useState(5);
+  const [label, setLabel] = useState("O culto começa em breve");
+
+  if (active && endsAt) {
+    const remaining = formatCountdown(endsAt - Date.now());
+    const done = endsAt - Date.now() <= 0;
+    return (
+      <div className="panel accent mb-lg">
+        <div className="panel-head">
+          <span className="panel-title">
+            <span className="dot live" /> Contagem regressiva
+          </span>
+          <button className="btn btn-secondary btn-sm" onClick={onStop}>
+            ✕ Parar
+          </button>
+        </div>
+        <div className="panel-body" style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <p style={{ fontSize: "2.2rem", fontWeight: 800, fontVariantNumeric: "tabular-nums", color: done ? "var(--danger)" : "var(--text-primary)" }}>
+            {remaining}
+          </p>
+          {title && <p style={{ color: "var(--text-secondary)" }}>{title}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-card p-md mb-lg">
+      <p style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: 10, textTransform: "uppercase" }}>
+        ⏱ Contagem regressiva
+      </p>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <input
+          className="input-field"
+          type="number"
+          min={1}
+          max={180}
+          value={minutes}
+          onChange={(e) => setMinutes(Math.max(1, parseInt(e.target.value, 10) || 1))}
+          style={{ width: 80 }}
+        />
+        <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>minutos</span>
+        <input
+          className="input-field"
+          type="text"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Mensagem (opcional)"
+          style={{ flex: "1 1 200px", minWidth: 160 }}
+        />
+        <button className="btn btn-primary btn-sm" onClick={() => onStart(minutes * 60, label)}>
+          ▶ Iniciar
+        </button>
       </div>
     </div>
   );

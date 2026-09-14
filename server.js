@@ -25,7 +25,7 @@ function verifyToken(token) {
 
 function emptyState() {
   return {
-    mode: "idle", // "idle" | "lyrics" | "announcement" | "media"
+    mode: "idle", // "idle" | "lyrics" | "announcement" | "media" | "countdown"
     song: null,
     lyricIndex: -1,
     isPlaying: false,
@@ -36,6 +36,12 @@ function emptyState() {
     // Arquivo de mídia do próximo passo visível do roteiro — a tela de
     // projeção usa isso pra pré-carregar e trocar sem engasgo.
     nextMedia: null,
+    // Contagem regressiva, quando mode === "countdown". `countdownEndsAt` é
+    // um timestamp absoluto (Date.now() + duração) — cada tela calcula o
+    // "quanto falta" sozinha a partir dele, em vez de o servidor precisar
+    // ficar mandando atualização a cada segundo.
+    countdownEndsAt: null,
+    countdownTitle: null,
     // Presente quando um Culto (roteiro) está em apresentação; usado pela
     // tela de projeção e pelo painel pra mostrar "passo X de Y" e permitir
     // avançar/voltar globalmente (teclado/clique) além dos controles ad-hoc.
@@ -413,6 +419,39 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
       if (!payload || typeof payload !== "object") return;
       socket.broadcast.emit("media:progress", payload);
     });
+
+    // Contagem regressiva — pode rodar com ou sem um roteiro em apresentação
+    // (útil até antes do culto começar, tipo "entra em 5 minutos"). Mesma
+    // lógica de interjeição: se houver um roteiro ativo, ele fica pausado.
+    socket.on(
+      "admin:startCountdown",
+      onlyAdmin(({ seconds, title }) => {
+        if (typeof seconds !== "number" || !(seconds > 0)) return;
+        liveState = {
+          ...emptyState(),
+          mode: "countdown",
+          countdownEndsAt: Date.now() + seconds * 1000,
+          countdownTitle: typeof title === "string" ? title : "",
+          service: serviceInfoOf(activeService),
+          interjecting: !!activeService,
+        };
+        broadcast();
+      })
+    );
+
+    // Encerra a contagem: volta pro roteiro pausado, se houver, ou limpa a
+    // tela. Não precisa de confirmação — não é destrutivo, só some do ar.
+    socket.on(
+      "admin:stopCountdown",
+      onlyAdmin(() => {
+        if (liveState.mode !== "countdown") return;
+        if (activeService) enterStep();
+        else {
+          liveState = emptyState();
+          broadcast();
+        }
+      })
+    );
 
     // Volta a exibir o passo atual do roteiro pausado, encerrando a
     // interjeição (ex.: depois de mostrar um aviso avulso no meio do culto).

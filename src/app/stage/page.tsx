@@ -34,13 +34,15 @@ interface ServiceProgress {
 }
 
 interface LiveState {
-  mode: "idle" | "lyrics" | "announcement" | "media";
+  mode: "idle" | "lyrics" | "announcement" | "media" | "countdown";
   song: Song | null;
   lyricIndex: number;
   isPlaying: boolean;
   startedAt: number | null;
   announcement: Announcement | null;
   media: MediaItemLike | null;
+  countdownEndsAt: number | null;
+  countdownTitle: string | null;
   service: ServiceProgress | null;
 }
 
@@ -52,8 +54,20 @@ const EMPTY_STATE: LiveState = {
   startedAt: null,
   announcement: null,
   media: null,
+  countdownEndsAt: null,
+  countdownTitle: null,
   service: null,
 };
+
+/** Formata milissegundos restantes como mm:ss ou h:mm:ss. */
+function formatCountdown(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 /**
  * Stage View — monitor de confiança pra quem está no palco (músico,
@@ -91,6 +105,12 @@ export default function StagePage() {
     const interval = setInterval(() => setTick((t) => t + 1), 150);
     return () => clearInterval(interval);
   }, [state.isPlaying, state.mode]);
+
+  useEffect(() => {
+    if (state.mode !== "countdown") return;
+    const interval = setInterval(() => setTick((t) => t + 1), 250);
+    return () => clearInterval(interval);
+  }, [state.mode]);
 
   let currentLine: LyricLine | null = null;
   let nextLine: LyricLine | null = null;
@@ -146,6 +166,16 @@ export default function StagePage() {
         )}
         {state.mode === "media" && state.media && (
           <p style={{ fontSize: "clamp(1.6rem, 4.5vw, 4rem)", fontWeight: 700, opacity: 0.75 }}>🎬 {state.media.title}</p>
+        )}
+        {state.mode === "countdown" && state.countdownEndsAt && (
+          <>
+            {state.countdownTitle && (
+              <p style={{ fontSize: "clamp(1rem, 2.5vw, 1.6rem)", opacity: 0.7, marginBottom: "2vh" }}>{state.countdownTitle}</p>
+            )}
+            <p style={{ fontSize: "clamp(3rem, 10vw, 8rem)", fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+              {formatCountdown(state.countdownEndsAt - Date.now())}
+            </p>
+          </>
         )}
         {state.mode === "idle" && <p style={{ fontSize: "1.4rem", opacity: 0.3 }}>Aguardando...</p>}
       </div>
