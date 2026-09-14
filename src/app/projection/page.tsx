@@ -95,6 +95,10 @@ export default function ProjectionPage() {
   const socketRef = useRef<Socket | null>(null);
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const fadeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Chave do item de mídia que falhou ao carregar (arquivo corrompido/sumiu
+  // do disco). Sem isso, um arquivo quebrado deixava a tela em branco sem
+  // explicação — exatamente o "branco na tela" que mais assusta o operador.
+  const [brokenKey, setBrokenKey] = useState<string | null>(null);
 
   // ─── Configurações de marca (público, sem login) ────
   useEffect(() => {
@@ -226,6 +230,27 @@ export default function ProjectionPage() {
     return () => clearInterval(interval);
   }, [state.mode, mediaId]);
 
+  // Reseta o erro sempre que o item mostrado muda — senão um arquivo quebrado
+  // de um passo anterior continuaria marcado como quebrado pra sempre.
+  const currentMediaKey =
+    state.mode === "media" && state.media
+      ? `media-${state.media.id}`
+      : state.mode === "announcement" && state.announcement
+      ? `ann-${state.announcement.id}`
+      : null;
+  useEffect(() => {
+    setBrokenKey(null);
+  }, [currentMediaKey]);
+
+  // Se o item quebrado fazia parte de um roteiro em apresentação, segue em
+  // frente sozinho depois de alguns segundos — em vez de travar o culto
+  // esperando alguém notar e clicar em "próximo" manualmente.
+  useEffect(() => {
+    if (!brokenKey || !state.service) return;
+    const timer = setTimeout(() => socketRef.current?.emit("roteiro:next"), 4000);
+    return () => clearTimeout(timer);
+  }, [brokenKey, state.service]);
+
   const bgColor = settings?.bgColor || "#000";
   const textColor = settings?.textColor || "#fff";
 
@@ -251,6 +276,19 @@ export default function ProjectionPage() {
   // sobre trechos claros do vídeo.
   const textShadow = state.background ? "0 2px 18px rgba(0,0,0,0.85)" : undefined;
 
+  // Mostra o que estava previsto (o título, pelo menos) em vez de deixar a
+  // tela muda quando um arquivo não carrega — silêncio visual sem explicação
+  // é o pior cenário durante um culto ao vivo.
+  const brokenBlock = (title: string) => (
+    <div style={{ textAlign: "center", opacity: 0.7, maxWidth: "70vw" }}>
+      <p style={{ fontSize: "clamp(1.3rem, 3.5vw, 2.5rem)", fontWeight: 700, marginBottom: 12 }}>{title}</p>
+      <p style={{ fontSize: "clamp(0.85rem, 2vw, 1.2rem)", opacity: 0.75 }}>
+        ⚠ Não foi possível carregar este arquivo
+        {state.service ? " — avançando em instantes..." : ""}
+      </p>
+    </div>
+  );
+
   const brandBlock = (
     <div style={{ textAlign: "center", opacity: 0.3 }}>
       {settings?.logoUrl && (
@@ -264,8 +302,10 @@ export default function ProjectionPage() {
 
   return (
     <div className="projection-container" style={{ background: bgColor, color: textColor }}>
-      {/* ── Camada de fundo: vídeo que segue tocando por trás dos passos ── */}
-      {state.background && (
+      {/* ── Camada de fundo: vídeo que segue tocando por trás dos passos ──
+          Falha "quieta" de propósito — é decorativo, então um arquivo
+          quebrado só volta pra cor sólida, sem aviso nem interromper nada. */}
+      {state.background && brokenKey !== `bg-${state.background}` && (
         <video
           key={`bg-${state.background}`}
           src={`/api/media/${state.background}`}
@@ -273,6 +313,7 @@ export default function ProjectionPage() {
           loop
           muted
           playsInline
+          onError={() => setBrokenKey(`bg-${state.background}`)}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
         />
       )}
@@ -312,56 +353,76 @@ export default function ProjectionPage() {
 
         {/* ── Item de mídia (áudio/vídeo) ──────────────── */}
         {state.mode === "media" && state.media && state.media.kind === "video" && (
-          <video
-            key={`media-${state.media.id}`}
-            ref={mediaRef as React.RefObject<HTMLVideoElement>}
-            src={`/api/media/${state.media.file}`}
-            autoPlay
-            playsInline
-            loop={state.media.loop}
-            controls={false}
-            onEnded={onMediaEnded}
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
-          />
+          brokenKey === `media-${state.media.id}` ? (
+            brokenBlock(state.media.title)
+          ) : (
+            <video
+              key={`media-${state.media.id}`}
+              ref={mediaRef as React.RefObject<HTMLVideoElement>}
+              src={`/api/media/${state.media.file}`}
+              autoPlay
+              playsInline
+              loop={state.media.loop}
+              controls={false}
+              onEnded={onMediaEnded}
+              onError={() => setBrokenKey(`media-${state.media!.id}`)}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
+            />
+          )
         )}
 
         {state.mode === "media" && state.media && state.media.kind === "audio" && (
-          <>
-            <audio
-              key={`media-${state.media.id}`}
-              ref={mediaRef as React.RefObject<HTMLAudioElement>}
-              src={`/api/media/${state.media.file}`}
-              autoPlay
-              loop={state.media.loop}
-              onEnded={onMediaEnded}
-            />
-            {/* Áudio não tem imagem: mantém a marca da igreja na tela em vez
-                de deixar preto — a não ser que haja vídeo de fundo tocando. */}
-            {!state.background && brandBlock}
-          </>
+          brokenKey === `media-${state.media.id}` ? (
+            brokenBlock(state.media.title)
+          ) : (
+            <>
+              <audio
+                key={`media-${state.media.id}`}
+                ref={mediaRef as React.RefObject<HTMLAudioElement>}
+                src={`/api/media/${state.media.file}`}
+                autoPlay
+                loop={state.media.loop}
+                onEnded={onMediaEnded}
+                onError={() => setBrokenKey(`media-${state.media!.id}`)}
+              />
+              {/* Áudio não tem imagem: mantém a marca da igreja na tela em vez
+                  de deixar preto — a não ser que haja vídeo de fundo tocando. */}
+              {!state.background && brandBlock}
+            </>
+          )
         )}
 
         {state.mode === "announcement" && state.announcement && state.announcement.mediaType === "image" && state.announcement.mediaFile && (
-          <div key={state.announcement.id} style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", animation: "lyricFade 0.5s ease" }}>
-            <img
-              src={`/api/media/${state.announcement.mediaFile}`}
-              alt={state.announcement.title}
-              style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
-            />
-          </div>
+          brokenKey === `ann-${state.announcement.id}` ? (
+            brokenBlock(state.announcement.title)
+          ) : (
+            <div key={state.announcement.id} style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", animation: "lyricFade 0.5s ease" }}>
+              <img
+                src={`/api/media/${state.announcement.mediaFile}`}
+                alt={state.announcement.title}
+                onError={() => setBrokenKey(`ann-${state.announcement!.id}`)}
+                style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+              />
+            </div>
+          )
         )}
 
         {state.mode === "announcement" && state.announcement && state.announcement.mediaType === "video" && state.announcement.mediaFile && (
-          <video
-            key={state.announcement.id}
-            ref={mediaRef as React.RefObject<HTMLVideoElement>}
-            src={`/api/media/${state.announcement.mediaFile}`}
-            autoPlay
-            playsInline
-            controls={false}
-            onEnded={() => socketRef.current?.emit("roteiro:next")}
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
-          />
+          brokenKey === `ann-${state.announcement.id}` ? (
+            brokenBlock(state.announcement.title)
+          ) : (
+            <video
+              key={state.announcement.id}
+              ref={mediaRef as React.RefObject<HTMLVideoElement>}
+              src={`/api/media/${state.announcement.mediaFile}`}
+              autoPlay
+              playsInline
+              controls={false}
+              onEnded={() => socketRef.current?.emit("roteiro:next")}
+              onError={() => setBrokenKey(`ann-${state.announcement!.id}`)}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
+            />
+          )
         )}
 
         {state.mode === "announcement" && state.announcement && state.announcement.mediaType === "none" && (

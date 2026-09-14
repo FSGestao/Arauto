@@ -39,3 +39,32 @@ export async function POST(
   }
   return NextResponse.json(result);
 }
+
+// PATCH — corrige o texto de UMA linha, sem reenviar a letra inteira. Usado
+// pela edição ao vivo (corrigir uma linha errada sem sair da apresentação).
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const user = getUserFromRequest(req);
+  if (!user) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+
+  const songId = parseInt(params.id, 10);
+  const { lineIndex, text } = await req.json();
+
+  if (typeof lineIndex !== "number" || typeof text !== "string") {
+    return NextResponse.json({ error: "Informe lineIndex e text" }, { status: 400 });
+  }
+
+  const result = await updateCollection<Song, Song | null>("songs", (col) => {
+    const song = col.items.find((s) => s.id === songId);
+    if (!song || !song.lyrics[lineIndex]) return null;
+    song.lyrics[lineIndex].text = text;
+    song.updatedAt = new Date().toISOString();
+    return song;
+  });
+
+  if (!result) {
+    return NextResponse.json({ error: "Música ou linha não encontrada" }, { status: 404 });
+  }
+  return NextResponse.json(result);
+}

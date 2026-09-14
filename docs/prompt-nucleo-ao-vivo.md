@@ -5,15 +5,19 @@
 
 ## Status (atualizado — ver seção 2 pra detalhe de cada item)
 
-✅ Feito: 2.3 Áudio/vídeo (player dedicado, fundo de vídeo, fade, pré-carga) · 2.4 Roteiro
-kanban (indicador de posição, "ocultar" em vez de "excluir", card de mídia) · 2.5 Stage View
-(`/stage`) · 2.6 Busca global (Ctrl+K, cobre música/aviso/mídia) · 2.7 Indicador de telas
-conectadas (Projeção/Stage, tempo real) · 2.9 Backup — exportar/importar `.zip` com um clique,
-com validação e backup de segurança automático antes de restaurar.
+✅ Feito: 2.1 busca instantânea (Ctrl+K) + edição de linha ao vivo, sem sair da apresentação
+(corrige na tela na hora e grava na biblioteca) · 2.2 preview da projeção real antes de ir ao
+ar + "salvar como aviso permanente" a partir do texto rápido · 2.3 Áudio/vídeo (player
+dedicado, fundo de vídeo, fade, pré-carga) · 2.4 Roteiro kanban (indicador de posição,
+"ocultar" em vez de "excluir", card de mídia) · 2.5 Stage View (`/stage`) · 2.6 Busca global
+(Ctrl+K, cobre música/aviso/mídia) · 2.7 Indicador de telas conectadas (Projeção/Stage, tempo
+real) · 2.9 Backup (exportar/importar `.zip` com um clique, validação + backup de segurança
+automático) e fallback visual pra mídia quebrada/não encontrada (título + aviso, avança
+sozinho depois de alguns segundos se fizer parte de um roteiro).
 
-🚧 Falta: 2.1 edição de linha de letra ao vivo sem sair da apresentação · 2.2 "salvar como
-aviso permanente" a partir do texto rápido + preview antes de ir ao ar · 2.9 fallback visual
-pra mídia quebrada/não encontrada (hoje só existe pra letra vazia).
+🎉 Todos os itens do núcleo de compartilhamento de informação ao vivo (seção 2) estão
+implementados. Próximo passo natural: rodar o roteiro de validação da seção 4 com um
+operador de verdade.
 
 ## 0. Contexto
 

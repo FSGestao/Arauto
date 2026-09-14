@@ -304,6 +304,32 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
       })
     );
 
+    // Corrige o texto da linha que está no ar AGORA MESMO, sem sair da
+    // apresentação — a igreja já está olhando a tela errada, então a correção
+    // precisa aparecer imediatamente, não só depois de avançar/voltar.
+    // A gravação permanente na biblioteca é feita à parte pelo painel
+    // (PATCH /api/songs/:id/lyrics), este evento só atualiza o que está ao vivo.
+    socket.on(
+      "admin:editCurrentLine",
+      onlyAdmin((text) => {
+        if (typeof text !== "string" || liveState.mode !== "lyrics" || !liveState.song) return;
+        if (liveState.lyricIndex < 0 || !liveState.song.lyrics[liveState.lyricIndex]) return;
+
+        // Muta a cópia da música em memória — tanto a que está solta em
+        // liveState.song quanto, se for o caso, a que vive dentro do passo
+        // ativo do roteiro (senão a correção "voltaria" ao trocar de passo
+        // e retornar pra essa música mais tarde na mesma apresentação).
+        liveState.song.lyrics[liveState.lyricIndex].text = text;
+        if (activeService) {
+          const step = activeService.steps[activeService.stepIndex];
+          if (step && step.kind === "lyrics" && step.song.lyrics[liveState.lyricIndex]) {
+            step.song.lyrics[liveState.lyricIndex].text = text;
+          }
+        }
+        broadcast();
+      })
+    );
+
     socket.on(
       "admin:showAnnouncement",
       onlyAdmin((announcement) => {

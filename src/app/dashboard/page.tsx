@@ -358,6 +358,24 @@ export default function DashboardPage() {
     socketRef.current?.emit("admin:setBackground", file);
   }
 
+  // Corrige a linha que está no ar AGORA, sem sair da apresentação: atualiza
+  // a tela na hora (socket) e grava na biblioteca pra não perder a correção
+  // (PATCH só essa linha — evita reenviar a letra inteira).
+  function editCurrentLine(text: string) {
+    if (!live.song || live.lyricIndex < 0) return;
+    socketRef.current?.emit("admin:editCurrentLine", text);
+    fetch(`/api/songs/${live.song.id}/lyrics`, {
+      method: "PATCH",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ lineIndex: live.lyricIndex, text }),
+    })
+      .then((r) => {
+        if (r.ok) fetchSongs();
+        else showToast("error", "Corrigido na tela, mas não salvou na biblioteca");
+      })
+      .catch(() => showToast("error", "Corrigido na tela, mas não salvou na biblioteca"));
+  }
+
   function openProjectionWindow() {
     window.open("/projection", "_blank");
   }
@@ -441,6 +459,27 @@ export default function DashboardPage() {
     });
     setQuickText({ title: "", content: "" });
     setShowInsertPanel(false);
+  }
+  // Guarda o texto rápido como aviso de verdade — pra não ter que digitar de
+  // novo da próxima vez (ex.: um recado que o pastor pede toda semana).
+  async function saveQuickTextAsAnnouncement() {
+    if (!quickText.title.trim() && !quickText.content.trim()) return;
+    const res = await fetch("/api/announcements", {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        title: quickText.title.trim() || "Texto",
+        content: quickText.content.trim(),
+        mediaType: "none",
+        mediaFile: null,
+      }),
+    });
+    if (res.ok) {
+      showToast("success", "Salvo como aviso — já aparece na lista ao lado");
+      fetchAnnouncements();
+    } else {
+      showToast("error", "Erro ao salvar aviso");
+    }
   }
 
   // ─── CRUD handlers ────────────────────────────────────
@@ -717,9 +756,37 @@ export default function DashboardPage() {
                       rows={3}
                       style={{ marginBottom: 6 }}
                     />
-                    <button className="btn btn-primary btn-sm" onClick={showQuickText}>
-                      Mostrar agora
-                    </button>
+
+                    {/* Preview: como vai aparecer na projeção de verdade — mesma
+                        cor de fundo/texto configurada nas Configurações — antes
+                        de decidir se manda ao vivo. */}
+                    {(quickText.title.trim() || quickText.content.trim()) && settings && (
+                      <div
+                        style={{
+                          background: settings.bgColor,
+                          color: settings.textColor,
+                          borderRadius: "var(--radius-sm)",
+                          padding: "14px 16px",
+                          marginBottom: 8,
+                          textAlign: "center",
+                        }}
+                      >
+                        <p style={{ fontSize: "0.65rem", opacity: 0.5, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                          Prévia da projeção
+                        </p>
+                        <p style={{ fontWeight: 700, fontSize: "1rem" }}>{quickText.title.trim() || "Texto"}</p>
+                        {quickText.content.trim() && <p style={{ fontSize: "0.85rem", opacity: 0.85, marginTop: 4 }}>{quickText.content.trim()}</p>}
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button className="btn btn-primary btn-sm" onClick={showQuickText}>
+                        Mostrar agora
+                      </button>
+                      <button className="btn btn-secondary btn-sm" onClick={saveQuickTextAsAnnouncement}>
+                        💾 Salvar como aviso
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 6 }}>Da biblioteca</p>
@@ -788,9 +855,11 @@ export default function DashboardPage() {
                       {currentLyricText && (
                         <>
                           <p className="field-label">Linha atual</p>
-                          <p style={{ color: "var(--text-primary)", fontSize: "1.25rem", lineHeight: 1.4, marginBottom: 12 }}>
-                            &ldquo;{currentLyricText}&rdquo;
-                          </p>
+                          <EditableCurrentLine
+                            text={currentLyricText}
+                            onSave={editCurrentLine}
+                            style={{ fontSize: "1.25rem", lineHeight: 1.4, marginBottom: 12 }}
+                          />
                         </>
                       )}
 
@@ -1029,7 +1098,7 @@ export default function DashboardPage() {
                     {live.mode === "announcement" && (live.announcement?.title || "—")}
                   </p>
                   {currentLyricText && (
-                    <p style={{ color: "var(--text-secondary)", marginBottom: 16 }}>&ldquo;{currentLyricText}&rdquo;</p>
+                    <EditableCurrentLine text={currentLyricText} onSave={editCurrentLine} style={{ marginBottom: 16 }} />
                   )}
 
                   {live.mode === "lyrics" && live.song && (
@@ -1593,6 +1662,66 @@ function AnnouncementModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         </form>
       </div>
     </div>
+  );
+}
+
+/**
+ * Linha de letra que vira campo de texto ao clicar — corrige um erro de
+ * digitação sem sair da apresentação. Enter salva, Esc cancela. O componente
+ * não sabe onde salvar; só chama `onSave`, que cuida do socket + da API.
+ */
+function EditableCurrentLine({
+  text,
+  onSave,
+  style,
+}: {
+  text: string;
+  onSave: (text: string) => void;
+  style?: React.CSSProperties;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(text);
+
+  useEffect(() => {
+    if (!editing) setDraft(text);
+  }, [text, editing]);
+
+  function commit() {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== text) onSave(trimmed);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div style={{ display: "flex", gap: 8, alignItems: "center", ...style }}>
+        <input
+          className="input-field"
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") {
+              setDraft(text);
+              setEditing(false);
+            }
+          }}
+          onBlur={commit}
+          style={{ flex: 1, fontSize: "inherit" }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <p
+      onClick={() => setEditing(true)}
+      style={{ color: "var(--text-secondary)", cursor: "pointer", ...style }}
+      title="Clique para corrigir esta linha — atualiza a tela na hora"
+    >
+      &ldquo;{text}&rdquo; <span style={{ opacity: 0.4, fontSize: "0.8em" }}>✏️</span>
+    </p>
   );
 }
 
