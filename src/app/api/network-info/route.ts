@@ -6,8 +6,9 @@ import { getLocalIPs } from "../../../../lib/shared";
 // congelados no valor do momento do build em vez do valor real em runtime.
 export const dynamic = "force-dynamic";
 
-// GET — endereços da rede local onde a tela de projeção pode ser aberta
-// a partir de outro computador (ex.: o PC ligado ao projetor).
+// GET — endereços da rede local onde a tela de projeção (e a Stage View)
+// podem ser abertas a partir de outro computador/tablet (ex.: o PC ligado ao
+// projetor, ou um tablet no palco).
 export async function GET() {
   // globalThis.__PROJECAO_PORT__ (setado pelo server.js em runtime) é a fonte
   // confiável da porta real; process.env.PORT pode estar "congelado" no valor
@@ -18,5 +19,6 @@ export async function GET() {
   return NextResponse.json({
     port,
     projectionUrls: ips.map((ip) => `http://${ip}:${port}/projection`),
+    stageUrls: ips.map((ip) => `http://${ip}:${port}/stage`),
   });
 }

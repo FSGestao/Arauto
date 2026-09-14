@@ -153,6 +153,14 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
     io.emit("state:update", { ...liveState, volume, background, mediaPaused });
   }
 
+  // Quantas telas de cada tipo estão conectadas agora — pra quem está
+  // operando saber, ANTES do culto começar, se o projetor está mesmo
+  // recebendo o sinal (em vez de descobrir só quando já está tarde).
+  const connections = { admin: 0, projection: 0, stage: 0 };
+  function broadcastConnections() {
+    io.emit("connections:update", connections);
+  }
+
   // Pula direto para um passo específico (ex.: clique num card do roteiro)
   // — funciona mesmo que o passo esteja marcado como "excluído" (skip).
   // Sempre entra na música pela primeira linha (é um novo "evento" começando).
@@ -221,10 +229,24 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
     // inclusive numa reconexão depois de queda de rede, que é o caso em que
     // a tela não pode ficar congelada mostrando o passo antigo.
     socket.emit("state:update", { ...liveState, volume, background, mediaPaused });
+    socket.emit("connections:update", connections);
 
     const token = socket.handshake.auth && socket.handshake.auth.token;
     const payload = token ? verifyToken(token) : null;
     const isAdmin = !!payload;
+
+    // O tipo de tela (admin/projection/stage) vem do próprio cliente na
+    // conexão — só serve pra contar quem está conectado, não afeta permissão
+    // (essa continua vindo exclusivamente do token acima).
+    const role = ["admin", "projection", "stage"].includes(socket.handshake.query.role)
+      ? socket.handshake.query.role
+      : "projection";
+    connections[role]++;
+    broadcastConnections();
+    socket.on("disconnect", () => {
+      connections[role]--;
+      broadcastConnections();
+    });
 
     function onlyAdmin(fn) {
       return (...args) => {

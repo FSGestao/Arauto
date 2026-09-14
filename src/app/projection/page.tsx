@@ -106,7 +106,7 @@ export default function ProjectionPage() {
 
   // ─── Conexão WebSocket ────────────────────────────────
   useEffect(() => {
-    const socket: Socket = io({ path: "/socket.io" });
+    const socket: Socket = io({ path: "/socket.io", query: { role: "projection" } });
     socketRef.current = socket;
     socket.on("state:update", (s: LiveState) => setState(s));
     socket.on("media:seek", (seconds: number) => {

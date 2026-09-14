@@ -3,6 +3,18 @@
 > Documento de trabalho. Cole isto inteiro numa sessão (deste ou de outro assistente) como
 > instrução de implementação, ou use como checklist de revisão de escopo.
 
+## Status (atualizado — ver seção 2 pra detalhe de cada item)
+
+✅ Feito: 2.3 Áudio/vídeo (player dedicado, fundo de vídeo, fade, pré-carga) · 2.4 Roteiro
+kanban (indicador de posição, "ocultar" em vez de "excluir", card de mídia) · 2.5 Stage View
+(`/stage`) · 2.6 Busca global (Ctrl+K, cobre música/aviso/mídia) · 2.7 Indicador de telas
+conectadas (Projeção/Stage, tempo real) · 2.9 Backup — exportar/importar `.zip` com um clique,
+com validação e backup de segurança automático antes de restaurar.
+
+🚧 Falta: 2.1 edição de linha de letra ao vivo sem sair da apresentação · 2.2 "salvar como
+aviso permanente" a partir do texto rápido + preview antes de ir ao ar · 2.9 fallback visual
+pra mídia quebrada/não encontrada (hoje só existe pra letra vazia).
+
 ## 0. Contexto
 
 O **Arauto** é um sistema de projeção para igrejas: um app desktop (Electron + Next.js,

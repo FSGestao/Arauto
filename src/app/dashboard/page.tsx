@@ -153,6 +153,7 @@ export default function DashboardPage() {
   const [mediaLibrary, setMediaLibrary] = useState<MediaItem[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [networkUrls, setNetworkUrls] = useState<string[]>([]);
+  const [stageUrls, setStageUrls] = useState<string[]>([]);
 
   // Roteiro (Culto) sendo editado ou apresentado
   const [services, setServices] = useState<Service[]>([]);
@@ -178,6 +179,7 @@ export default function DashboardPage() {
   // fora do liveState de propósito (chega a cada 500ms e não deve
   // re-renderizar o roteiro inteiro nem virar estado do servidor).
   const [mediaProgress, setMediaProgress] = useState({ currentTime: 0, duration: 0 });
+  const [connections, setConnections] = useState({ admin: 0, projection: 0, stage: 0 });
   const socketRef = useRef<Socket | null>(null);
 
   // Modals
@@ -193,6 +195,8 @@ export default function DashboardPage() {
   const [quickText, setQuickText] = useState({ title: "", content: "" });
   // Índice do card do roteiro sendo arrastado (kanban), enquanto o arraste dura.
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  // Busca global (Ctrl+K) — acessível de qualquer aba, sem tirar a mão do teclado.
+  const [showSearch, setShowSearch] = useState(false);
 
   // Toast
   const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -227,17 +231,21 @@ export default function DashboardPage() {
 
     fetch("/api/network-info")
       .then((r) => r.json())
-      .then((data) => setNetworkUrls(data.projectionUrls || []))
+      .then((data) => {
+        setNetworkUrls(data.projectionUrls || []);
+        setStageUrls(data.stageUrls || []);
+      })
       .catch(() => {});
   }, []);
 
   // ─── Socket.IO — controla a projeção em tempo real ───
   useEffect(() => {
     if (!user) return;
-    const socket = io({ path: "/socket.io", auth: { token: getAuthToken() } });
+    const socket = io({ path: "/socket.io", auth: { token: getAuthToken() }, query: { role: "admin" } });
     socketRef.current = socket;
     socket.on("state:update", (state: LiveState) => setLive(state));
     socket.on("media:progress", (p: { currentTime: number; duration: number }) => setMediaProgress(p));
+    socket.on("connections:update", (c: { admin: number; projection: number; stage: number }) => setConnections(c));
     return () => {
       socket.disconnect();
     };
@@ -279,6 +287,22 @@ export default function DashboardPage() {
     fetchServices();
     fetchMedia();
   }, [user, fetchAnnouncements, fetchSongs, fetchServices, fetchMedia]);
+
+  // ─── Busca global (Ctrl+K / Cmd+K) ────────────────────
+  // Funciona de qualquer aba, sem precisar clicar em nada antes — é o "achar
+  // e colocar no ar em segundos" que o operador precisa sob pressão.
+  useEffect(() => {
+    function handleGlobalKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowSearch(true);
+      } else if (e.key === "Escape") {
+        setShowSearch(false);
+      }
+    }
+    window.addEventListener("keydown", handleGlobalKey);
+    return () => window.removeEventListener("keydown", handleGlobalKey);
+  }, []);
 
   // ─── Apply brand theme ────────────────────────────────
   useEffect(() => {
@@ -336,6 +360,9 @@ export default function DashboardPage() {
 
   function openProjectionWindow() {
     window.open("/projection", "_blank");
+  }
+  function openStageWindow() {
+    window.open("/stage", "_blank");
   }
 
   // ─── Roteiro (Culto) ao vivo ──────────────────────────
@@ -522,6 +549,16 @@ export default function DashboardPage() {
           <span>{settings?.name || "Arauto"}</span>
         </div>
 
+        <button
+          className="sidebar-link"
+          onClick={() => setShowSearch(true)}
+          style={{ border: "1px solid var(--border-glass)", marginBottom: 4 }}
+        >
+          <span className="icon">🔍</span>
+          <span style={{ flex: 1, textAlign: "left" }}>Buscar</span>
+          <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontFamily: "monospace" }}>Ctrl+K</span>
+        </button>
+
         <nav className="sidebar-nav">
           {sidebarLinks.map((link) => (
             <button
@@ -553,9 +590,41 @@ export default function DashboardPage() {
           <>
             <div className="topbar">
               <h1>📽️ Projeção</h1>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                {/* Quantas telas de cada tipo estão conectadas agora — pra saber
+                    ANTES do culto se o projetor está mesmo recebendo o sinal. */}
+                <div
+                  style={{ display: "flex", gap: 12, fontSize: "0.78rem", color: "var(--text-muted)", marginRight: 8 }}
+                  title="Telas conectadas agora nesta rede"
+                >
+                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: "50%",
+                        background: connections.projection > 0 ? "var(--success)" : "var(--text-muted)",
+                      }}
+                    />
+                    Projeção {connections.projection}
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: "50%",
+                        background: connections.stage > 0 ? "var(--success)" : "var(--text-muted)",
+                      }}
+                    />
+                    Stage {connections.stage}
+                  </span>
+                </div>
                 <button className="btn btn-secondary" onClick={openProjectionWindow}>
                   Abrir janela de projeção
+                </button>
+                <button className="btn btn-secondary" onClick={openStageWindow} title="Monitor de confiança para quem está no palco">
+                  🎤 Abrir Stage View
                 </button>
                 <button className="btn btn-danger" onClick={stopAll}>
                   ✕ Limpar tela
@@ -566,10 +635,17 @@ export default function DashboardPage() {
             {networkUrls.length > 0 && (
               <div className="glass-card p-md mb-lg" style={{ fontSize: "0.85rem" }}>
                 <p style={{ color: "var(--text-secondary)", marginBottom: 6 }}>
-                  Para exibir em outro computador da mesma rede (ex.: o PC ligado ao projetor), abra no
-                  navegador:
+                  Projeção — para exibir em outro computador da mesma rede (ex.: o PC ligado ao projetor):
                 </p>
                 {networkUrls.map((u) => (
+                  <p key={u} style={{ fontFamily: "monospace", color: "var(--primary-light)" }}>
+                    {u}
+                  </p>
+                ))}
+                <p style={{ color: "var(--text-secondary)", margin: "10px 0 6px" }}>
+                  Stage View — monitor de confiança, pra abrir num tablet/monitor no palco:
+                </p>
+                {stageUrls.map((u) => (
                   <p key={u} style={{ fontFamily: "monospace", color: "var(--primary-light)" }}>
                     {u}
                   </p>
@@ -1420,6 +1496,23 @@ export default function DashboardPage() {
 
       {/* ─── Toast ─────────────────────────────────────── */}
       {toast && <div className={`toast toast-${toast.type}`}>{toast.text}</div>}
+
+      {/* ─── Busca global ──────────────────────────────── */}
+      {showSearch && (
+        <GlobalSearch
+          songs={songs}
+          announcements={announcements}
+          mediaLibrary={mediaLibrary}
+          onClose={() => setShowSearch(false)}
+          onPick={(kind, item) => {
+            if (kind === "song") selectSong(item as Song);
+            else if (kind === "announcement") showAnnouncementLive(item as Announcement);
+            else showMediaLive(item as MediaItem);
+            setShowSearch(false);
+            setTab("projecao");
+          }}
+        />
+      )}
     </>
   );
 }
@@ -1498,6 +1591,131 @@ function AnnouncementModal({ onClose, onSaved }: { onClose: () => void; onSaved:
             <button type="submit" className="btn btn-primary" disabled={saving || uploading}>{saving ? "Salvando..." : "Criar Aviso"}</button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+type SearchKind = "song" | "announcement" | "media";
+interface SearchResult {
+  kind: SearchKind;
+  id: number;
+  title: string;
+  sublabel: string;
+  item: Song | Announcement | MediaItem;
+}
+
+/**
+ * Busca global (Ctrl+K): um campo só, cobrindo música/aviso/mídia, com
+ * resultado a cada tecla (sem "Enter" pra filtrar), navegável por setas, e
+ * Enter já coloca no ar. É a resposta direta ao "achar e colocar no ar em
+ * menos de 3 segundos" — não dá pra fazer isso rolando três listas separadas.
+ */
+function GlobalSearch({
+  songs,
+  announcements,
+  mediaLibrary,
+  onClose,
+  onPick,
+}: {
+  songs: Song[];
+  announcements: Announcement[];
+  mediaLibrary: MediaItem[];
+  onClose: () => void;
+  onPick: (kind: SearchKind, item: Song | Announcement | MediaItem) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const results: SearchResult[] = (() => {
+    const q = query.trim().toLowerCase();
+    const songResults: SearchResult[] = songs
+      .filter((s) => !q || s.title.toLowerCase().includes(q) || (s.artist || "").toLowerCase().includes(q))
+      .map((s) => ({ kind: "song" as const, id: s.id, title: s.title, sublabel: s.artist || "Música", item: s }));
+    const annResults: SearchResult[] = announcements
+      .filter((a) => !q || a.title.toLowerCase().includes(q) || a.content.toLowerCase().includes(q))
+      .map((a) => ({ kind: "announcement" as const, id: a.id, title: a.title, sublabel: "Aviso", item: a }));
+    const mediaResults: SearchResult[] = mediaLibrary
+      .filter((m) => !q || m.title.toLowerCase().includes(q))
+      .map((m) => ({ kind: "media" as const, id: m.id, title: m.title, sublabel: m.kind === "audio" ? "Áudio" : "Vídeo", item: m }));
+    return [...songResults, ...annResults, ...mediaResults].slice(0, 30);
+  })();
+
+  useEffect(() => {
+    setSelected(0);
+  }, [query]);
+
+  function pick(r: SearchResult) {
+    onPick(r.kind, r.item);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelected((i) => Math.min(results.length - 1, i + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelected((i) => Math.max(0, i - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (results[selected]) pick(results[selected]);
+    }
+  }
+
+  const iconFor: Record<SearchKind, string> = { song: "🎵", announcement: "📢", media: "🎬" };
+
+  return (
+    <div className="modal-overlay" onClick={onClose} style={{ alignItems: "flex-start", paddingTop: "12vh" }}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, padding: 0, overflow: "hidden" }}>
+        <input
+          ref={inputRef}
+          className="input-field"
+          style={{ border: "none", borderRadius: 0, borderBottom: "1px solid var(--border-glass)", fontSize: "1.05rem", padding: "16px 20px" }}
+          placeholder="Buscar música, aviso ou mídia..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+        <div style={{ maxHeight: "50vh", overflowY: "auto", padding: "6px" }}>
+          {results.length === 0 ? (
+            <p style={{ padding: "20px", textAlign: "center", color: "var(--text-muted)", fontSize: "0.9rem" }}>
+              Nada encontrado
+            </p>
+          ) : (
+            results.map((r, i) => (
+              <div
+                key={`${r.kind}-${r.id}`}
+                onClick={() => pick(r)}
+                onMouseEnter={() => setSelected(i)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  background: i === selected ? "rgba(108,58,237,0.18)" : "transparent",
+                }}
+              >
+                <span style={{ fontSize: "1rem" }}>{iconFor[r.kind]}</span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <p style={{ fontSize: "0.9rem", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {r.title}
+                  </p>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{r.sublabel}</p>
+                </div>
+                {i === selected && (
+                  <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontFamily: "monospace" }}>Enter ↵</span>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1893,7 +2111,105 @@ function SettingsPanel({ settings, onSaved }: { settings: Settings; onSaved: (s:
           </div>
         </div>
       </div>
+
+      <BackupCard />
     </>
+  );
+}
+
+function BackupCard() {
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleExport() {
+    setExporting(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/backup/export", { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = /filename="?([^"]+)"?/.exec(disposition);
+      const filename = match ? match[1] : "arauto-backup.zip";
+      // Sem <a download> aqui não funciona em todo navegador — cria o link,
+      // clica sozinho e descarta, é o jeito padrão de baixar um blob gerado.
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setMessage({ type: "success", text: `Backup baixado: ${filename}` });
+    } catch {
+      setMessage({ type: "error", text: "Erro ao gerar o backup" });
+    }
+    setExporting(false);
+  }
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permite escolher o mesmo arquivo de novo depois
+    if (!file) return;
+
+    if (
+      !confirm(
+        "Isso vai SUBSTITUIR todas as músicas, avisos, mídias e contas atuais pelos dados do backup.\n\n" +
+          "Um backup de segurança dos dados atuais é salvo automaticamente antes, então dá pra voltar atrás. Continuar?"
+      )
+    ) {
+      return;
+    }
+
+    setImporting(true);
+    setMessage(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const token = document.cookie.match(/auth-token=([^;]+)/)?.[1] || "";
+      const res = await fetch("/api/backup/import", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ type: "success", text: `${data.message} (backup de segurança: ${data.safetyBackup})` });
+        setTimeout(() => window.location.reload(), 2500);
+      } else {
+        setMessage({ type: "error", text: data.error || "Erro ao importar o backup" });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Erro ao importar o backup" });
+    }
+    setImporting(false);
+  }
+
+  return (
+    <div className="glass-card p-xl" style={{ maxWidth: 600, marginTop: 24 }}>
+      <h3 style={{ marginBottom: 6 }}>Dados e Backup</h3>
+      <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: 20 }}>
+        Todos os dados (músicas, letras, avisos, mídia, contas) ficam em arquivos locais — nenhuma nuvem envolvida.
+        Exporte de vez em quando, principalmente antes de trocar de computador.
+      </p>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <button className="btn btn-primary" onClick={handleExport} disabled={exporting}>
+          {exporting ? "Gerando..." : "⬇ Exportar Backup (.zip)"}
+        </button>
+        <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+          {importing ? "Restaurando..." : "⬆ Importar Backup (.zip)"}
+        </button>
+        <input ref={fileInputRef} type="file" accept=".zip" hidden onChange={handleImportFile} />
+      </div>
+      {message && (
+        <p style={{ fontSize: "0.85rem", marginTop: 12, color: message.type === "success" ? "var(--success)" : "var(--danger)" }}>
+          {message.text}
+        </p>
+      )}
+    </div>
   );
 }
 
