@@ -1,0 +1,21 @@
+# Env
+.env
+.env.local
+
+# Next.js
+.next/
+out/
+
+# Node
+node_modules/
+
+# Dados locais (JSON) e segredo gerado automaticamente
+/data/
+
+# Instalador do app desktop (publicado manualmente, não versionado)
+/private/downloads/*
+!/private/downloads/.gitkeep
+
+# OS
+Thumbs.db
+.DS_Store

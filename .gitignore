@@ -1,0 +1,32 @@
+# Env
+.env
+.env.local
+
+# Next.js
+.next/
+out/
+tsconfig.tsbuildinfo
+
+# Node
+node_modules/
+
+# Dados locais (JSON), mídia enviada e segredo gerado automaticamente.
+# NUNCA versionar: contém contas de usuário, hashes de senha e o segredo JWT.
+/data/
+
+# Build do Electron
+/release/
+
+# Instaladores e binários (inclusive de terceiros usados só para pesquisa)
+*.exe
+*.msi
+
+# Sobras do scaffold antigo (Prisma) — o app usa arquivos JSON, não banco
+/prisma/
+
+# Diretórios temporários de teste
+tmp-*/
+
+# OS
+Thumbs.db
+.DS_Store
