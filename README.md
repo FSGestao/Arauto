@@ -37,9 +37,45 @@ Gera o instalador em `release/`. Depois, copie o `.exe` gerado para `website/pri
 
 ### Dados e configuração
 
-- Em desenvolvimento, os dados ficam em `./data/*.json` (users, songs, announcements, settings, secret.key).
+- Em desenvolvimento, os dados ficam em `./data/*.json` (users, songs, announcements, settings, media, secret.key).
 - No app empacotado (Electron), ficam na pasta de dados do usuário do Windows (`%APPDATA%/Arauto/data`).
 - `JWT_SECRET` é opcional — se não definido, é gerado automaticamente na primeira execução.
+
+### Rodando em outra máquina (sem o `.env`)
+
+O arquivo `.env` **não é versionado** de propósito: um segredo que entra no Git
+fica no histórico para sempre, e todo mundo com acesso ao repositório passa a
+ter a mesma chave. Mas isso não atrapalha, porque **o app desktop não precisa
+de `.env` nenhum**:
+
+```bash
+git clone https://github.com/FSGestao/Arauto.git
+cd Arauto
+npm install
+npm run dev          # já sobe em http://localhost:3210
+```
+
+O que aconteceria sem as variáveis:
+
+| Variável | Sem ela | Quando definir |
+|---|---|---|
+| `JWT_SECRET` | Gerado sozinho (48 bytes aleatórios) e salvo em `data/secret.key`. Sobrevive a reinícios, então os logins continuam válidos. | Só se quiser o **mesmo** segredo em várias instalações — o que normalmente não se quer. |
+| `PORT` | Usa `3210`. | Se a 3210 já estiver ocupada nessa máquina. |
+
+Ou seja: cada instalação gera o próprio segredo local, o que é mais seguro do
+que compartilhar um. Se ainda assim precisar fixar valores, copie o modelo
+versionado:
+
+```bash
+cp .env.example .env     # e preencha o que quiser sobrescrever
+```
+
+**O site (`website/`) é o caso diferente:** ele tem segredos de verdade que
+não dão para gerar sozinho — `SUPERADMIN_PASSWORD` e as credenciais de SMTP.
+Esses valores vão em `.env.local` na máquina de desenvolvimento, e nas
+*environment variables* do serviço de hospedagem em produção (ex.: painel da
+Vercel) — nunca no repositório. Guarde-os num gerenciador de senhas, não num
+arquivo solto.
 
 ---
 
