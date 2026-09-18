@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
+import { findBackgroundPreset, PRESET_PREFIX } from "../../lib/backgroundPresets";
 
 interface LyricLine {
   startMs: number;
@@ -28,7 +29,7 @@ interface Announcement {
 interface MediaItem {
   id: number;
   title: string;
-  kind: "audio" | "video";
+  kind: "audio" | "video" | "image";
   file: string;
   loop: boolean;
   volume: number;
@@ -329,20 +330,37 @@ export default function ProjectionPage() {
 
   return (
     <div className="projection-container" style={{ background: bgColor, color: textColor }}>
-      {/* ── Camada de fundo: vídeo que segue tocando por trás dos passos ──
-          Falha "quieta" de propósito — é decorativo, então um arquivo
-          quebrado só volta pra cor sólida, sem aviso nem interromper nada. */}
-      {state.background && brokenKey !== `bg-${state.background}` && (
-        <video
-          key={`bg-${state.background}`}
-          src={`/api/media/${state.background}`}
-          autoPlay
-          loop
-          muted
-          playsInline
-          onError={() => setBrokenKey(`bg-${state.background}`)}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
+      {/* ── Camada de fundo: imagem, vídeo ou um dos fundos prontos, sempre
+          por trás dos passos. Falha "quieta" de propósito — é decorativo,
+          então um arquivo quebrado só volta pra cor sólida, sem aviso nem
+          interromper nada. */}
+      {state.background && state.background.startsWith(PRESET_PREFIX) && (
+        <div
+          className={findBackgroundPreset(state.background.slice(PRESET_PREFIX.length))?.className}
+          style={{ position: "absolute", inset: 0, zIndex: 0 }}
         />
+      )}
+      {state.background && !state.background.startsWith(PRESET_PREFIX) && brokenKey !== `bg-${state.background}` && (
+        /\.(jpe?g|png|gif|webp)$/i.test(state.background) ? (
+          <img
+            key={`bg-${state.background}`}
+            src={`/api/media/${state.background}`}
+            alt=""
+            onError={() => setBrokenKey(`bg-${state.background}`)}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
+          />
+        ) : (
+          <video
+            key={`bg-${state.background}`}
+            src={`/api/media/${state.background}`}
+            autoPlay
+            loop
+            muted
+            playsInline
+            onError={() => setBrokenKey(`bg-${state.background}`)}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
+          />
+        )
       )}
 
       {/* ── Conteúdo, sempre acima do fundo ────────────── */}
@@ -435,6 +453,20 @@ export default function ProjectionPage() {
                   de deixar preto — a não ser que haja vídeo de fundo tocando. */}
               {!state.background && brandBlock}
             </>
+          )
+        )}
+
+        {state.mode === "media" && state.media && state.media.kind === "image" && (
+          brokenKey === `media-${state.media.id}` ? (
+            brokenBlock(state.media.title)
+          ) : (
+            <img
+              key={`media-${state.media.id}`}
+              src={`/api/media/${state.media.file}`}
+              alt={state.media.title}
+              onError={() => setBrokenKey(`media-${state.media!.id}`)}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }}
+            />
           )
         )}
 

@@ -61,6 +61,15 @@ export function SettingsModal({
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || "");
   const [saving, setSaving] = useState(false);
 
+  // Espelha DEFAULT_SETTINGS de src/lib/types.ts — não importamos de lá de
+  // propósito (ver o comentário no topo de dashboard/types.ts).
+  function restaurarPadrao() {
+    setPrimaryColor("#6C3AED");
+    setSecondaryColor("#8B5CF6");
+    setBgColor("#0F0A1E");
+    setTextColor("#FFFFFF");
+  }
+
   async function handleSave() {
     setSaving(true);
     const res = await fetch("/api/settings", {
@@ -118,6 +127,12 @@ export function SettingsModal({
                 <input className="input-field" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://..." />
               </div>
 
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <label className="input-label" style={{ margin: 0 }}>Cores</label>
+                <button type="button" className="act-btn ghost" onClick={restaurarPadrao} style={{ fontSize: "0.78rem" }}>
+                  Restaurar padrão do sistema
+                </button>
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <div>
                   <label className="input-label">Cor Primária</label>

@@ -16,6 +16,7 @@ import type {
   LibraryFilter,
 } from "./types";
 import { getAuthHeaders, getAuthToken, formatCountdown, formatTime, formatTimestamp, STEP_LABEL } from "./utils";
+import { BACKGROUND_PRESETS, PRESET_PREFIX } from "../../lib/backgroundPresets";
 import { Icon } from "./components/Icon";
 import { EditableCurrentLine } from "./components/EditableCurrentLine";
 import { GlobalSearch } from "./components/GlobalSearch";
@@ -78,6 +79,7 @@ export default function DashboardPage() {
   const [showLyricsModal, setShowLyricsModal] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [showMediaModal, setShowMediaModal] = useState(false);
+  const [showBackgroundPicker, setShowBackgroundPicker] = useState(false);
   const [editingSong, setEditingSong] = useState<Song | null>(null);
   // Painel "Inserir agora" (durante um roteiro em apresentação) e o texto
   // avulso digitado na hora (ex.: um versículo) — não é salvo na biblioteca.
@@ -648,9 +650,14 @@ export default function DashboardPage() {
                 </div>
               )}
               {filter === "media" && (
-                <button className="act-btn primary" onClick={() => setShowMediaModal(true)}>
-                  <Icon name="plus" /> Enviar Áudio/Vídeo
-                </button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="act-btn ghost" onClick={() => setShowBackgroundPicker((v) => !v)}>
+                    <Icon name="layers" /> Fundos prontos
+                  </button>
+                  <button className="act-btn primary" onClick={() => setShowMediaModal(true)}>
+                    <Icon name="plus" /> Enviar Áudio/Vídeo
+                  </button>
+                </div>
               )}
               {filter === "services" && (
                 <button className="act-btn primary" onClick={() => setShowServiceModal(true)}>
@@ -658,6 +665,41 @@ export default function DashboardPage() {
                 </button>
               )}
                 </div>
+
+              {/* Fundos prontos: gradientes/animações em CSS, sem precisar
+                  enviar arquivo. Ficam junto do filtro Mídia porque é onde
+                  as outras formas de fundo (imagem/vídeo enviado) também
+                  vivem. */}
+              {filter === "media" && showBackgroundPicker && (
+                <div className="glass-card p-md mb-md" style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  <button
+                    className="act-btn ghost"
+                    style={{ flexDirection: "column", height: 64, width: 64, padding: 4, fontSize: "0.68rem", gap: 4 }}
+                    onClick={() => setBackground(null)}
+                  >
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid var(--border-glass)" }} />
+                    Nenhum
+                  </button>
+                  {BACKGROUND_PRESETS.map((p) => {
+                    const active = live.background === PRESET_PREFIX + p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        className="act-btn ghost"
+                        title={p.label}
+                        style={{
+                          flexDirection: "column", height: 64, width: 64, padding: 4, fontSize: "0.68rem", gap: 4,
+                          borderColor: active ? "var(--primary)" : undefined,
+                        }}
+                        onClick={() => setBackground(active ? null : PRESET_PREFIX + p.id)}
+                      >
+                        <div style={{ width: 28, height: 28, borderRadius: "50%", background: p.swatch }} />
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* ── Lista (coluna 1) ── */}
               <div className="library-list">
@@ -814,7 +856,7 @@ export default function DashboardPage() {
                   (visibleMedia.length === 0 ? (
                     <div className="roteiro-empty">
                       {mediaLibrary.length === 0
-                        ? "Nenhum áudio ou vídeo enviado ainda. Envie trilhas, playbacks e vídeos — eles entram no roteiro, tocam avulsos ou viram fundo animado atrás da letra."
+                        ? "Nenhum áudio, vídeo ou imagem enviado ainda. Envie trilhas, playbacks, vídeos e imagens — eles entram no roteiro, tocam avulsos ou viram fundo atrás da letra."
                         : "Nada encontrado com esse filtro."}
                     </div>
                   ) : (
@@ -825,7 +867,7 @@ export default function DashboardPage() {
                         </button>
                         <p className="library-item-title">{m.title}</p>
                         <p className="library-item-sub">
-                          {m.kind === "audio" ? "Áudio" : "Vídeo"}
+                          {m.kind === "audio" ? "Áudio" : m.kind === "video" ? "Vídeo" : "Imagem"}
                           {m.loop && " · em loop"}
                         </p>
                         {m.kind === "video" ? (
@@ -834,6 +876,12 @@ export default function DashboardPage() {
                             controls
                             preload="metadata"
                             style={{ width: "100%", borderRadius: "var(--radius-sm)", background: "#000", maxHeight: 160, marginTop: 10 }}
+                          />
+                        ) : m.kind === "image" ? (
+                          <img
+                            src={`/api/media/${m.file}`}
+                            alt={m.title}
+                            style={{ width: "100%", borderRadius: "var(--radius-sm)", maxHeight: 160, objectFit: "cover", marginTop: 10 }}
                           />
                         ) : (
                           <audio src={`/api/media/${m.file}`} controls preload="metadata" style={{ width: "100%", marginTop: 10 }} />
@@ -845,7 +893,7 @@ export default function DashboardPage() {
                           <button className="act-btn ghost" onClick={() => addToRoteiro(activeService, "media", m.id, m.title)}>
                             <Icon name="plus" /> Adicionar ao Roteiro
                           </button>
-                          {m.kind === "video" && (
+                          {(m.kind === "video" || m.kind === "image") && (
                             <button
                               className="act-btn ghost"
                               onClick={() => setBackground(live.background === m.file ? null : m.file)}
@@ -853,21 +901,23 @@ export default function DashboardPage() {
                               {live.background === m.file ? "Tirar do fundo" : "Usar como fundo"}
                             </button>
                           )}
-                          <label className="act-btn ghost" style={{ cursor: "pointer" }}>
-                            <input
-                              type="checkbox"
-                              checked={m.loop}
-                              onChange={async (e) => {
-                                await fetch(`/api/media-library/${m.id}`, {
-                                  method: "PUT",
-                                  headers: getAuthHeaders(),
-                                  body: JSON.stringify({ loop: e.target.checked }),
-                                });
-                                fetchMedia();
-                              }}
-                            />
-                            Loop
-                          </label>
+                          {m.kind !== "image" && (
+                            <label className="act-btn ghost" style={{ cursor: "pointer" }}>
+                              <input
+                                type="checkbox"
+                                checked={m.loop}
+                                onChange={async (e) => {
+                                  await fetch(`/api/media-library/${m.id}`, {
+                                    method: "PUT",
+                                    headers: getAuthHeaders(),
+                                    body: JSON.stringify({ loop: e.target.checked }),
+                                  });
+                                  fetchMedia();
+                                }}
+                              />
+                              Loop
+                            </label>
+                          )}
                         </div>
                       </div>
                     ))

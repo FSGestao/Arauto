@@ -59,7 +59,7 @@ export interface AnnouncementTemplate {
    Diferente de `Announcement` com mediaFile: um item de mídia é uma peça
    de áudio ou vídeo com controles próprios (volume, loop, progresso) —
    uma trilha, um vídeo institucional, um playback. */
-export type MediaKind = "audio" | "video";
+export type MediaKind = "audio" | "video" | "image";
 
 export interface MediaItem {
   id: number;

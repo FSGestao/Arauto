@@ -25,9 +25,9 @@ export async function POST(req: NextRequest) {
   }
 
   const { title, kind, file, loop, volume } = await req.json();
-  if (!title || !file || (kind !== "audio" && kind !== "video")) {
+  if (!title || !file || (kind !== "audio" && kind !== "video" && kind !== "image")) {
     return NextResponse.json(
-      { error: "Informe título, arquivo e tipo (audio ou video)" },
+      { error: "Informe título, arquivo e tipo (audio, video ou image)" },
       { status: 400 }
     );
   }

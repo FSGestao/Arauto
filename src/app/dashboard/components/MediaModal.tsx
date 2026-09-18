@@ -6,7 +6,7 @@ import { getAuthHeaders } from "../utils";
 export function MediaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<string | null>(null);
-  const [kind, setKind] = useState<"audio" | "video" | null>(null);
+  const [kind, setKind] = useState<"audio" | "video" | "image" | null>(null);
   const [loop, setLoop] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -26,13 +26,11 @@ export function MediaModal({ onClose, onSaved }: { onClose: () => void; onSaved:
       body: form,
     });
     const data = await res.json();
-    if (res.ok && (data.mediaType === "audio" || data.mediaType === "video")) {
+    if (res.ok && (data.mediaType === "audio" || data.mediaType === "video" || data.mediaType === "image")) {
       setFile(data.filename);
       setKind(data.mediaType);
       // Sugere o nome do arquivo como título, se ainda estiver vazio.
       if (!title.trim()) setTitle(picked.name.replace(/\.[^.]+$/, ""));
-    } else if (res.ok) {
-      setError("Este arquivo é uma imagem. Imagens entram como Aviso, na aba Avisos.");
     } else {
       setError(data.error || "Erro ao enviar arquivo");
     }
@@ -62,21 +60,22 @@ export function MediaModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         <h2>Nova Mídia</h2>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
-            <label className="input-label">Arquivo de áudio ou vídeo *</label>
+            <label className="input-label">Arquivo de áudio, vídeo ou imagem *</label>
             <input
               className="input-field"
               type="file"
-              accept="audio/*,video/*"
+              accept="audio/*,video/*,image/*"
               onChange={handleFileChange}
               disabled={uploading}
             />
             <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: 4 }}>
-              Áudio: mp3, wav, ogg, m4a (até 100 MB) · Vídeo: mp4, webm, ogv (até 300 MB)
+              Áudio: mp3, wav, ogg, m4a (até 100 MB) · Vídeo: mp4, webm, ogv (até 300 MB) ·
+              Imagem: jpg, png, gif, webp (até 20 MB) — imagens servem como fundo estático atrás da letra.
             </p>
             {uploading && <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 4 }}>Enviando...</p>}
             {file && !uploading && (
               <p style={{ fontSize: "0.8rem", color: "var(--success)", marginTop: 4 }}>
-                ✓ {kind === "audio" ? "Áudio" : "Vídeo"} enviado
+                ✓ {kind === "audio" ? "Áudio" : kind === "video" ? "Vídeo" : "Imagem"} enviado
               </p>
             )}
           </div>
@@ -90,10 +89,12 @@ export function MediaModal({ onClose, onSaved }: { onClose: () => void; onSaved:
               placeholder="Ex: Trilha de abertura"
             />
           </div>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.9rem" }}>
-            <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
-            Repetir em loop (útil pra fundo animado e trilha de espera)
-          </label>
+          {kind !== "image" && (
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.9rem" }}>
+              <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
+              Repetir em loop (útil pra fundo animado e trilha de espera)
+            </label>
+          )}
           {error && <p style={{ fontSize: "0.85rem", color: "var(--danger)" }}>{error}</p>}
           <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>

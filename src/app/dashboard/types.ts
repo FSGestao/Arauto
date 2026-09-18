@@ -59,7 +59,7 @@ export interface Song {
 export interface MediaItem {
   id: number;
   title: string;
-  kind: "audio" | "video";
+  kind: "audio" | "video" | "image";
   file: string;
   loop: boolean;
   volume: number;
