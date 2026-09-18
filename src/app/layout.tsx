@@ -14,6 +14,17 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
+      <head>
+        {/* Aplica o tema escolhido ANTES da primeira pintura. Sem isto o
+            painel volta sempre escuro ao recarregar (a preferência só era
+            lida quando a janela de Configurações abria) e, mesmo depois de
+            corrigido, haveria um piscar branco/escuro a cada carga. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem("arauto-theme");if(t==="light"||t==="dark"){document.documentElement.dataset.theme=t}}catch(e){}`,
+          }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   );
