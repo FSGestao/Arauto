@@ -20,11 +20,14 @@ export interface BackgroundPreset {
 
 export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   { id: "meia-noite", label: "Meia-noite", className: "bg-preset-meia-noite", swatch: "linear-gradient(160deg, #0f0a1e, #1a1235)" },
-  { id: "aurora", label: "Aurora", className: "bg-preset-aurora", swatch: "linear-gradient(120deg, #4c1d95, #7c3aed, #db2777)" },
-  { id: "amanhecer", label: "Amanhecer", className: "bg-preset-amanhecer", swatch: "linear-gradient(160deg, #7c2d92, #db5b3d, #f2a65a)" },
-  { id: "oceano", label: "Oceano", className: "bg-preset-oceano", swatch: "linear-gradient(140deg, #0c4a6e, #0891b2, #0f766e)" },
+  { id: "aurora", label: "Aurora", className: "bg-preset-aurora", swatch: "linear-gradient(120deg, #6d28d9, #db2777, #2563eb, #6d28d9)" },
+  { id: "por-do-sol", label: "Pôr do sol", className: "bg-preset-por-do-sol", swatch: "linear-gradient(160deg, #7c2d92, #db5b3d, #f2a65a, #fde68a)" },
+  { id: "oceano", label: "Oceano", className: "bg-preset-oceano", swatch: "linear-gradient(140deg, #0c4a6e, #0891b2, #0f766e, #34d399)" },
+  { id: "esmeralda", label: "Esmeralda", className: "bg-preset-esmeralda", swatch: "linear-gradient(150deg, #052e16, #047857, #10b981)" },
   { id: "estrelado", label: "Estrelado", className: "bg-preset-estrelado", swatch: "radial-gradient(circle, #1e1b4b, #0a0a1a)" },
-  { id: "raios", label: "Raios de luz", className: "bg-preset-raios", swatch: "conic-gradient(from 0deg, #1e1b4b, #4c1d95, #1e1b4b)" },
+  { id: "raios-dourados", label: "Raios dourados", className: "bg-preset-raios-dourados", swatch: "conic-gradient(from 0deg, #78350f, #d97706, #fbbf24, #78350f)" },
+  { id: "bokeh", label: "Luzes (bokeh)", className: "bg-preset-bokeh", swatch: "radial-gradient(circle at 30% 30%, #fbbf24, transparent 30%), radial-gradient(circle at 70% 60%, #db2777, transparent 30%), #1e1033" },
+  { id: "vitral", label: "Vitral", className: "bg-preset-vitral", swatch: "linear-gradient(135deg, #7c3aed, #db2777, #f59e0b, #0891b2)" },
 ];
 
 export function findBackgroundPreset(id: string): BackgroundPreset | null {

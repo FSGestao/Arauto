@@ -63,6 +63,7 @@ export interface MediaItem {
   file: string;
   loop: boolean;
   volume: number;
+  source?: "upload" | "youtube";
 }
 
 export interface StepSummary {
@@ -91,6 +92,8 @@ export interface LiveState {
   nextMedia: string | null;
   countdownEndsAt: number | null;
   countdownTitle: string | null;
+  countdownMediaFile: string | null;
+  countdownMediaKind: "image" | "video" | null;
   service: ServiceProgress | null;
   interjecting: boolean;
   volume: number;

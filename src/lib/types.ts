@@ -65,9 +65,13 @@ export interface MediaItem {
   id: number;
   title: string;
   kind: MediaKind;
-  file: string; // nome do arquivo em data/media/
+  file: string; // nome do arquivo em data/media/ — ou, se source === "youtube", o ID do vídeo
   loop: boolean;
   volume: number; // 0..1 — volume padrão deste item
+  /** Ausente ou "upload": arquivo em data/media. "youtube": `file` é o ID
+   *  do vídeo, tocado pelo player embutido do YouTube — só faz sentido com
+   *  kind === "video". */
+  source?: "upload" | "youtube";
   createdAt: string;
   updatedAt: string;
 }

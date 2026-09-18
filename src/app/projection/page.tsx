@@ -33,6 +33,48 @@ interface MediaItem {
   file: string;
   loop: boolean;
   volume: number;
+  /** "youtube": `file` é o ID do vídeo (11 caracteres), não um nome de
+   *  arquivo em data/media — tocado com o player embutido do YouTube. */
+  source?: "upload" | "youtube";
+}
+
+declare global {
+  interface Window {
+    YT?: {
+      Player: new (el: HTMLElement | string, opts: Record<string, unknown>) => YTPlayer;
+      PlayerState: { ENDED: number; PLAYING: number; PAUSED: number };
+    };
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+interface YTPlayer {
+  playVideo(): void;
+  pauseVideo(): void;
+  seekTo(seconds: number, allowSeekAhead: boolean): void;
+  setVolume(v: number): void;
+  getVolume(): number;
+  getCurrentTime(): number;
+  getDuration(): number;
+  destroy(): void;
+}
+
+/** Carrega o script do IFrame Player API do YouTube uma única vez — várias
+ *  chamadas (uma por vídeo trocado) reaproveitam a mesma tag/promessa. */
+let ytApiPromise: Promise<void> | null = null;
+function loadYouTubeApi(): Promise<void> {
+  if (window.YT?.Player) return Promise.resolve();
+  if (ytApiPromise) return ytApiPromise;
+  ytApiPromise = new Promise((resolve) => {
+    const anterior = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      anterior?.();
+      resolve();
+    };
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+  });
+  return ytApiPromise;
 }
 
 interface Settings {
@@ -62,6 +104,8 @@ interface LiveState {
   nextMedia: string | null;
   countdownEndsAt: number | null;
   countdownTitle: string | null;
+  countdownMediaFile: string | null;
+  countdownMediaKind: "image" | "video" | null;
   service: ServiceProgress | null;
   volume: number;
   background: string | null;
@@ -79,6 +123,8 @@ const EMPTY_STATE: LiveState = {
   nextMedia: null,
   countdownEndsAt: null,
   countdownTitle: null,
+  countdownMediaFile: null,
+  countdownMediaKind: null,
   service: null,
   volume: 1,
   background: null,
@@ -109,6 +155,11 @@ export default function ProjectionPage() {
   const [, setTick] = useState(0);
   const socketRef = useRef<Socket | null>(null);
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
+  // Vídeo do YouTube: o player embutido controla tudo (play/pausa/posição/
+  // volume) por uma API própria, não por um <video> comum — por isso vive
+  // num ref separado do `mediaRef` de arquivos locais.
+  const ytPlayerRef = useRef<YTPlayer | null>(null);
+  const ytContainerRef = useRef<HTMLDivElement | null>(null);
   const fadeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Chave do item de mídia que falhou ao carregar (arquivo corrompido/sumiu
   // do disco). Sem isso, um arquivo quebrado deixava a tela em branco sem
@@ -135,8 +186,9 @@ export default function ProjectionPage() {
     // Cores/nome/logo mudaram no painel: recarrega sem precisar de F5 aqui.
     socket.on("settings:update", () => carregarSettings());
     socket.on("media:seek", (seconds: number) => {
-      const el = mediaRef.current;
-      if (el && Number.isFinite(seconds)) el.currentTime = seconds;
+      if (!Number.isFinite(seconds)) return;
+      if (ytPlayerRef.current) ytPlayerRef.current.seekTo(seconds, true);
+      else if (mediaRef.current) mediaRef.current.currentTime = seconds;
     });
     return () => {
       socket.disconnect();
@@ -194,41 +246,94 @@ export default function ProjectionPage() {
 
   // ─── Volume com rampa (fade) ──────────────────────────
   // Sobe/desce o volume aos poucos em vez de cortar seco — corte seco na
-  // caixa de som da igreja soa amador.
+  // caixa de som da igreja soa amador. Funciona tanto pro <video>/<audio>
+  // local quanto pro player do YouTube (escalas diferentes: 0–1 vs 0–100),
+  // por isso ler/escrever o volume passa pelas duas funções abaixo em vez
+  // de tocar direto em `mediaRef.current.volume`.
+  const getCurrentVolume = useCallback(() => {
+    if (ytPlayerRef.current) return ytPlayerRef.current.getVolume() / 100;
+    return mediaRef.current?.volume ?? 1;
+  }, []);
+  const applyVolume = useCallback((v: number) => {
+    const clamped = Math.min(1, Math.max(0, v));
+    if (ytPlayerRef.current) ytPlayerRef.current.setVolume(clamped * 100);
+    if (mediaRef.current) mediaRef.current.volume = clamped;
+  }, []);
+
   const rampVolume = useCallback((target: number, ms: number) => {
-    const el = mediaRef.current;
-    if (!el) return;
     if (fadeTimerRef.current) clearInterval(fadeTimerRef.current);
     const stepMs = 30;
     const steps = Math.max(1, Math.round(ms / stepMs));
-    const from = el.volume;
+    const from = getCurrentVolume();
     let i = 0;
     fadeTimerRef.current = setInterval(() => {
       i++;
-      const current = mediaRef.current;
-      if (!current) {
+      if (!mediaRef.current && !ytPlayerRef.current) {
         if (fadeTimerRef.current) clearInterval(fadeTimerRef.current);
         return;
       }
-      current.volume = Math.min(1, Math.max(0, from + (target - from) * (i / steps)));
+      applyVolume(from + (target - from) * (i / steps));
       if (i >= steps && fadeTimerRef.current) clearInterval(fadeTimerRef.current);
     }, stepMs);
-  }, []);
+  }, [getCurrentVolume, applyVolume]);
 
   const mediaId = state.media?.id ?? null;
+  const isYoutube = state.media?.source === "youtube";
   const targetVolume = (state.media?.volume ?? 1) * state.volume;
+
+  // ─── Player do YouTube: cria quando o item é do YouTube, destrói ao
+  //     trocar de item ou saír do modo mídia. Um <video>/<audio> comum
+  //     nasce e morre com o próprio elemento HTML (via `key`); o player do
+  //     YouTube precisa desse ciclo de vida explícito porque é uma API.
+  useEffect(() => {
+    if (!isYoutube || !state.media) return;
+    let destruido = false;
+    let player: YTPlayer | null = null;
+    loadYouTubeApi().then(() => {
+      if (destruido || !ytContainerRef.current || !window.YT) return;
+      player = new window.YT.Player(ytContainerRef.current, {
+        videoId: state.media!.file,
+        playerVars: {
+          autoplay: 1, controls: 0, disablekb: 1, modestbranding: 1,
+          rel: 0, playsinline: 1, mute: 0,
+          loop: state.media!.loop ? 1 : 0,
+          playlist: state.media!.loop ? state.media!.file : undefined,
+        },
+        events: {
+          onReady: () => { player!.setVolume(0); },
+          onStateChange: (e: { data: number }) => {
+            if (e.data === window.YT!.PlayerState.ENDED) onMediaEnded();
+          },
+          onError: () => setBrokenKey(`media-${state.media!.id}`),
+        },
+      });
+      ytPlayerRef.current = player;
+    });
+    return () => {
+      destruido = true;
+      try { player?.destroy(); } catch {}
+      ytPlayerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaId, isYoutube]);
 
   // Ao trocar de item de mídia: começa mudo e sobe (fade-in).
   useEffect(() => {
-    const el = mediaRef.current;
-    if (!el || mediaId === null) return;
-    el.volume = 0;
-    rampVolume(targetVolume, FADE_MS);
+    if (mediaId === null) return;
+    // O player do YouTube demora um instante extra pra existir (carrega o
+    // script + monta o iframe) — sem essa espera, o fade-in começaria
+    // "no vazio" antes do player estar pronto pra receber setVolume.
+    const atraso = isYoutube ? 300 : 0;
+    const t = setTimeout(() => {
+      applyVolume(0);
+      rampVolume(targetVolume, FADE_MS);
+    }, atraso);
+    return () => clearTimeout(t);
     // `targetVolume` fica fora das dependências de propósito: mudanças de
     // volume durante a reprodução são tratadas no efeito abaixo, sem refazer
     // o fade-in do início.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mediaId, rampVolume]);
+  }, [mediaId, isYoutube, rampVolume, applyVolume]);
 
   // Ajuste de volume durante a reprodução (operador mexendo no slider).
   useEffect(() => {
@@ -238,6 +343,11 @@ export default function ProjectionPage() {
 
   // Pausa/retoma conforme o painel manda.
   useEffect(() => {
+    if (ytPlayerRef.current) {
+      if (state.mediaPaused) ytPlayerRef.current.pauseVideo();
+      else ytPlayerRef.current.playVideo();
+      return;
+    }
     const el = mediaRef.current;
     if (!el) return;
     if (state.mediaPaused) el.pause();
@@ -248,8 +358,16 @@ export default function ProjectionPage() {
   useEffect(() => {
     if (state.mode !== "media") return;
     const interval = setInterval(() => {
+      if (!socketRef.current) return;
+      if (ytPlayerRef.current) {
+        socketRef.current.emit("media:progress", {
+          currentTime: ytPlayerRef.current.getCurrentTime(),
+          duration: ytPlayerRef.current.getDuration() || 0,
+        });
+        return;
+      }
       const el = mediaRef.current;
-      if (!el || !socketRef.current) return;
+      if (!el) return;
       socketRef.current.emit("media:progress", {
         currentTime: el.currentTime,
         duration: Number.isFinite(el.duration) ? el.duration : 0,
@@ -377,8 +495,33 @@ export default function ProjectionPage() {
       >
         {state.mode === "idle" && !state.background && brandBlock}
 
+        {state.mode === "countdown" && state.countdownEndsAt && state.countdownMediaFile && (
+          /* Cartaz/vídeo do evento atrás do relógio — mesma ideia do vídeo de
+             fundo, mas específico da contagem (não fica quando ela termina). */
+          brokenKey === `countdown-${state.countdownMediaFile}` ? null : state.countdownMediaKind === "video" ? (
+            <video
+              key={`countdown-${state.countdownMediaFile}`}
+              src={`/api/media/${state.countdownMediaFile}`}
+              autoPlay
+              loop
+              muted
+              playsInline
+              onError={() => setBrokenKey(`countdown-${state.countdownMediaFile}`)}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
+            />
+          ) : (
+            <img
+              key={`countdown-${state.countdownMediaFile}`}
+              src={`/api/media/${state.countdownMediaFile}`}
+              alt=""
+              onError={() => setBrokenKey(`countdown-${state.countdownMediaFile}`)}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
+            />
+          )
+        )}
+
         {state.mode === "countdown" && state.countdownEndsAt && (
-          <div style={{ textAlign: "center", textShadow }}>
+          <div style={{ textAlign: "center", textShadow: state.countdownMediaFile ? "0 2px 18px rgba(0,0,0,0.85)" : textShadow, position: "relative", zIndex: 1 }}>
             {state.countdownTitle && (
               <p style={{ fontSize: "clamp(1.1rem, 3vw, 2.2rem)", opacity: 0.85, marginBottom: "3vh" }}>{state.countdownTitle}</p>
             )}
@@ -416,7 +559,22 @@ export default function ProjectionPage() {
         )}
 
         {/* ── Item de mídia (áudio/vídeo) ──────────────── */}
-        {state.mode === "media" && state.media && state.media.kind === "video" && (
+        {state.mode === "media" && state.media && state.media.kind === "video" && state.media.source === "youtube" && (
+          brokenKey === `media-${state.media.id}` ? (
+            brokenBlock(state.media.title)
+          ) : (
+            // O player do YouTube monta o próprio <iframe> dentro deste div
+            // (ver o efeito que cria window.YT.Player) — por isso não tem
+            // `src` aqui, diferente do <video> de arquivo local abaixo.
+            <div
+              key={`media-${state.media.id}`}
+              ref={ytContainerRef}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", background: "#000" }}
+            />
+          )
+        )}
+
+        {state.mode === "media" && state.media && state.media.kind === "video" && state.media.source !== "youtube" && (
           brokenKey === `media-${state.media.id}` ? (
             brokenBlock(state.media.title)
           ) : (

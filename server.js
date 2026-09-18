@@ -42,6 +42,10 @@ function emptyState() {
     // ficar mandando atualização a cada segundo.
     countdownEndsAt: null,
     countdownTitle: null,
+    // Imagem/vídeo opcional que acompanha a contagem (ex.: um cartaz do
+    // evento) — o arquivo já enviado em Mídia, aqui só o nome + o tipo.
+    countdownMediaFile: null,
+    countdownMediaKind: null,
     // Presente quando um Culto (roteiro) está em apresentação; usado pela
     // tela de projeção e pelo painel pra mostrar "passo X de Y" e permitir
     // avançar/voltar globalmente (teclado/clique) além dos controles ad-hoc.
@@ -425,13 +429,15 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
     // lógica de interjeição: se houver um roteiro ativo, ele fica pausado.
     socket.on(
       "admin:startCountdown",
-      onlyAdmin(({ seconds, title }) => {
+      onlyAdmin(({ seconds, title, mediaFile, mediaKind }) => {
         if (typeof seconds !== "number" || !(seconds > 0)) return;
         liveState = {
           ...emptyState(),
           mode: "countdown",
           countdownEndsAt: Date.now() + seconds * 1000,
           countdownTitle: typeof title === "string" ? title : "",
+          countdownMediaFile: typeof mediaFile === "string" && mediaFile ? mediaFile : null,
+          countdownMediaKind: mediaKind === "image" || mediaKind === "video" ? mediaKind : null,
           service: serviceInfoOf(activeService),
           interjecting: !!activeService,
         };

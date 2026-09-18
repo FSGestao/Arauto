@@ -59,6 +59,8 @@ export default function DashboardPage() {
     nextMedia: null,
     countdownEndsAt: null,
     countdownTitle: null,
+    countdownMediaFile: null,
+    countdownMediaKind: null,
     interjecting: false,
     volume: 1,
     background: null,
@@ -283,9 +285,9 @@ export default function DashboardPage() {
   }
 
   // ─── Contagem regressiva ──────────────────────────────
-  function startCountdown(seconds: number, title: string) {
+  function startCountdown(seconds: number, title: string, mediaFile: string | null, mediaKind: "image" | "video" | null) {
     if (!(seconds > 0)) return;
-    socketRef.current?.emit("admin:startCountdown", { seconds, title });
+    socketRef.current?.emit("admin:startCountdown", { seconds, title, mediaFile, mediaKind });
   }
   function stopCountdown() {
     socketRef.current?.emit("admin:stopCountdown");
@@ -726,7 +728,7 @@ export default function DashboardPage() {
                               handleDeleteSong(s.id);
                             }}
                           >
-                            <Icon name="more" />
+                            <Icon name="trash" />
                           </button>
                           <p className="library-item-title">{s.title}</p>
                           <p className="library-item-sub">
@@ -815,7 +817,7 @@ export default function DashboardPage() {
                       visibleAnnouncements.map((a) => (
                         <div key={a.id} className={`library-item ${live.announcement?.id === a.id ? "active" : ""}`}>
                           <button className="library-item-menu" title="Remover aviso" onClick={() => handleDeleteAnnouncement(a.id)}>
-                            <Icon name="more" />
+                            <Icon name="trash" />
                           </button>
                           <p className="library-item-title">{a.title}</p>
                           <p className="library-item-sub">
@@ -863,14 +865,20 @@ export default function DashboardPage() {
                     visibleMedia.map((m) => (
                       <div key={m.id} className={`library-item ${live.media?.id === m.id ? "active" : ""}`}>
                         <button className="library-item-menu" title="Remover mídia" onClick={() => handleDeleteMedia(m.id)}>
-                          <Icon name="more" />
+                          <Icon name="trash" />
                         </button>
                         <p className="library-item-title">{m.title}</p>
                         <p className="library-item-sub">
-                          {m.kind === "audio" ? "Áudio" : m.kind === "video" ? "Vídeo" : "Imagem"}
+                          {m.source === "youtube" ? "Vídeo do YouTube" : m.kind === "audio" ? "Áudio" : m.kind === "video" ? "Vídeo" : "Imagem"}
                           {m.loop && " · em loop"}
                         </p>
-                        {m.kind === "video" ? (
+                        {m.source === "youtube" ? (
+                          <img
+                            src={`https://img.youtube.com/vi/${m.file}/mqdefault.jpg`}
+                            alt=""
+                            style={{ width: "100%", borderRadius: "var(--radius-sm)", maxHeight: 160, objectFit: "cover", marginTop: 10 }}
+                          />
+                        ) : m.kind === "video" ? (
                           <video
                             src={`/api/media/${m.file}`}
                             controls
@@ -893,7 +901,9 @@ export default function DashboardPage() {
                           <button className="act-btn ghost" onClick={() => addToRoteiro(activeService, "media", m.id, m.title)}>
                             <Icon name="plus" /> Adicionar ao Roteiro
                           </button>
-                          {(m.kind === "video" || m.kind === "image") && (
+                          {/* Fundo só suporta arquivo local ou preset por enquanto — um
+                              vídeo do YouTube não dá pra colocar atrás do conteúdo. */}
+                          {(m.kind === "video" || m.kind === "image") && m.source !== "youtube" && (
                             <button
                               className="act-btn ghost"
                               onClick={() => setBackground(live.background === m.file ? null : m.file)}
@@ -1403,6 +1413,7 @@ export default function DashboardPage() {
               active={live.mode === "countdown"}
               endsAt={live.countdownEndsAt}
               title={live.countdownTitle}
+              mediaLibrary={mediaLibrary}
               onStart={startCountdown}
               onStop={stopCountdown}
             />
