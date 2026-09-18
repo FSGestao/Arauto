@@ -12,16 +12,29 @@
   --secondary:      #EC4899;
   --accent:         #F59E0B;
   --bg-deep:        #0F0A1E;
-  --bg-card:        rgba(255, 255, 255, 0.06);
-  --bg-card-hover:  rgba(255, 255, 255, 0.10);
-  --bg-glass:       rgba(255, 255, 255, 0.08);
-  --border-glass:   rgba(255, 255, 255, 0.12);
+  --bg-card:        var(--overlay-4);
+  --bg-card-hover:  var(--overlay-6);
+  --bg-glass:       var(--overlay-5);
+  --border-glass:   var(--overlay-7);
   --text-primary:   #F8FAFC;
   --text-secondary: #94A3B8;
   --text-muted:     #64748B;
   --success:        #10B981;
   --danger:         #EF4444;
   --warning:        #F59E0B;
+  /* Escala de sobreposição — usada em cards, inputs, tabelas, scrollbar.
+     No tema escuro é branco translúcido; no claro (ver [data-theme="light"]
+     abaixo) vira preto translúcido, mantendo os mesmos níveis de contraste. */
+  --overlay-1:  rgba(255, 255, 255, 0.03);
+  --overlay-2:  rgba(255, 255, 255, 0.04);
+  --overlay-3:  rgba(255, 255, 255, 0.05);
+  --overlay-4:  rgba(255, 255, 255, 0.06);
+  --overlay-5:  rgba(255, 255, 255, 0.08);
+  --overlay-6:  rgba(255, 255, 255, 0.10);
+  --overlay-7:  rgba(255, 255, 255, 0.12);
+  --overlay-8:  rgba(255, 255, 255, 0.15);
+  --overlay-9:  rgba(255, 255, 255, 0.18);
+  --overlay-10: rgba(255, 255, 255, 0.25);
   --radius-sm:      8px;
   --radius-md:      12px;
   --radius-lg:      16px;
@@ -31,6 +44,32 @@
   --transition:     all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --font-body:      'Inter', system-ui, -apple-system, sans-serif;
   --font-display:   'Outfit', 'Inter', system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+/* ─── Tema claro ───────────────────────────────────────
+   Aplicado no <html> como data-theme="light" pelo alternador do painel
+   Admin (ver ThemeToggle em dashboard/page.tsx). Não afeta a tela de
+   projeção (.projection-*), que fica sempre escura — é o que vai pro
+   telão, e isso é independente do tema do painel de quem opera. */
+:root[data-theme="light"] {
+  --bg-deep:        #F6F4FB;
+  --text-primary:   #1E1B29;
+  --text-secondary: #5B5570;
+  --text-muted:     #8A84A0;
+  --overlay-1:  rgba(20, 16, 40, 0.04);
+  --overlay-2:  rgba(20, 16, 40, 0.05);
+  --overlay-3:  rgba(20, 16, 40, 0.07);
+  --overlay-4:  rgba(20, 16, 40, 0.08);
+  --overlay-5:  rgba(20, 16, 40, 0.10);
+  --overlay-6:  rgba(20, 16, 40, 0.13);
+  --overlay-7:  rgba(20, 16, 40, 0.16);
+  --overlay-8:  rgba(20, 16, 40, 0.20);
+  --overlay-9:  rgba(20, 16, 40, 0.24);
+  --overlay-10: rgba(20, 16, 40, 0.32);
+  --shadow-glow:    0 0 40px rgba(108, 58, 237, 0.12);
+  --shadow-card:    0 4px 24px rgba(30, 20, 60, 0.10);
+  color-scheme: light;
 }
 
 /* ─── Reset & Base ───────────────────────────────────── */
@@ -111,7 +150,7 @@ a:hover {
 
 .glass-card:hover {
   background: var(--bg-card-hover);
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: var(--overlay-9);
   transform: translateY(-2px);
   box-shadow: var(--shadow-glow);
 }
@@ -146,7 +185,7 @@ a:hover {
   flex-wrap: wrap;
   padding: 11px 16px;
   border-bottom: 1px solid var(--border-glass);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--overlay-1);
   flex-shrink: 0;
 }
 
@@ -194,7 +233,7 @@ a:hover {
   width: 100%;
   height: 5px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--overlay-6);
   overflow: hidden;
 }
 .progress-fill {
@@ -211,7 +250,7 @@ input[type="range"].slider {
   width: 100%;
   height: 5px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--overlay-7);
   outline: none;
   cursor: pointer;
 }
@@ -318,7 +357,7 @@ input[type="range"].slider::-moz-range-thumb {
 .input-field {
   width: 100%;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--overlay-3);
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-md);
   color: var(--text-primary);
@@ -334,7 +373,7 @@ input[type="range"].slider::-moz-range-thumb {
 
 .input-field:focus {
   border-color: var(--primary-light);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--overlay-5);
   box-shadow: 0 0 0 3px rgba(108, 58, 237, 0.15);
 }
 
@@ -397,60 +436,816 @@ textarea.input-field {
 .p-lg { padding: 24px; }
 .p-xl { padding: 32px; }
 
-/* ─── Sidebar ────────────────────────────────────────── */
-.sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 260px;
+/* ─── Cockpit Layout ─────────────────────────────────── */
+/* O painel inteiro é uma grade de 3 faixas: toolbar, corpo e dock.
+   Nada rola fora dessas faixas — cada painel rola por dentro. */
+.cockpit {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
   height: 100vh;
-  background: rgba(15, 10, 30, 0.95);
-  backdrop-filter: blur(20px);
-  border-right: 1px solid var(--border-glass);
-  padding: 24px 16px;
-  display: flex;
-  flex-direction: column;
-  z-index: 100;
-  transition: var(--transition);
+  overflow: hidden;
+  background: var(--bg-deep);
+  gap: 10px;
+  padding: 0 0 12px;
+  position: relative;
 }
 
-.sidebar-logo {
+/* ─── Toolbar (top bar) ──────────────────────────────── */
+.cockpit-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  margin-bottom: 32px;
+  gap: 16px;
+  padding: 17px 24px;
+  flex-shrink: 0;
 }
 
-.sidebar-logo img {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-sm);
-  object-fit: cover;
+.toolbar-logo {
+  display: block;
+  width: 31px;
+  height: 31px;
+  flex-shrink: 0;
 }
 
-.sidebar-logo span {
+.toolbar-brand {
   font-family: var(--font-display);
-  font-size: 1.15rem;
+  font-size: 1.6rem;
   font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin: 0 8px 0 -4px;
+  white-space: nowrap;
+}
+
+/* Campo de busca da toolbar: input de verdade, largo, no estilo do mockup. */
+.toolbar-search {
+  position: relative;
+  flex: 0 1 420px;
+  min-width: 140px;
+}
+.toolbar-search svg {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 17px;
+  height: 17px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.toolbar-search input {
+  width: 100%;
+  padding: 12px 14px 12px 40px;
+  border-radius: 12px;
+  border: 1px solid var(--border-glass);
+  background: var(--overlay-3);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.94rem;
+  outline: none;
+  transition: var(--transition);
+}
+.toolbar-search input::placeholder { color: var(--text-muted); }
+.toolbar-search input:focus {
+  border-color: rgba(139, 92, 246, 0.55);
+  background: var(--overlay-4);
+}
+
+.toolbar-filters {
+  display: flex;
+  gap: 10px;
+}
+
+/* Filtros em pílula com borda — o ativo ganha fundo e borda roxos. */
+.filter-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border: 1px solid var(--border-glass);
+  border-radius: 12px;
+  background: var(--overlay-2);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.94rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+.filter-tab svg { width: 17px; height: 17px; flex-shrink: 0; }
+.filter-tab:hover {
+  background: var(--overlay-5);
+  color: var(--text-primary);
+}
+.filter-tab.active {
+  background: rgba(108, 58, 237, 0.22);
+  border-color: rgba(139, 92, 246, 0.55);
+  color: var(--primary-light);
+}
+
+.toolbar-spacer { flex: 1; }
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toolbar-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  border: 1px solid var(--border-glass);
+  background: var(--overlay-2);
+  color: var(--text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.toolbar-icon-btn svg { width: 18px; height: 18px; }
+.toolbar-icon-btn:hover {
+  background: var(--overlay-5);
+  color: var(--text-primary);
+}
+.toolbar-icon-btn.danger:hover {
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* Botão principal da toolbar (Abrir Projeção). */
+.toolbar-cta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 20px;
+  border: none;
+  border-radius: 12px;
+  background: var(--primary);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 0.94rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+.toolbar-cta svg { width: 17px; height: 17px; }
+.toolbar-cta:hover {
+  background: var(--primary-light);
+  box-shadow: 0 6px 20px rgba(108, 58, 237, 0.35);
+}
+
+/* Telas conectadas: três pontinhos discretos (detalhe no title). */
+.toolbar-connections {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+.conn-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.conn-dot.on { background: var(--success); }
+.conn-dot.off { background: var(--text-muted); }
+.conn-dot.warn { background: var(--warning); }
+
+/* ─── Body: biblioteca (card) + roteiro (card) ───────── */
+.cockpit-body {
+  display: grid;
+  grid-template-columns: 1fr 390px;
+  gap: 14px;
+  padding: 0 24px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Card de superfície — a "folha" que carrega cada painel. */
+.cockpit-card {
+  background: var(--overlay-2);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Biblioteca: filtro no topo, depois lista + detalhe lado a lado. */
+.cockpit-library {
+  padding: 16px;
+  gap: 14px;
+}
+
+.library-filter {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.library-filter svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.library-filter input {
+  width: 100%;
+  padding: 9px 12px 9px 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border-glass);
+  background: var(--overlay-3);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.86rem;
+  outline: none;
+}
+.library-filter input::placeholder { color: var(--text-muted); }
+.library-filter input:focus { border-color: rgba(139, 92, 246, 0.5); }
+
+/* Duas colunas dentro da biblioteca: lista à esquerda, detalhe à direita.
+   O cabeçalho (filtro + criar) ocupa só a coluna da lista, e o detalhe começa
+   na mesma altura do primeiro item — por isso as duas linhas. */
+.library-split {
+  display: grid;
+  grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px 18px;
+  flex: 1;
+  min-height: 0;
+}
+.library-split.single { grid-template-columns: minmax(0, 1fr); }
+
+.library-header { grid-column: 1; grid-row: 1; }
+.library-list   { grid-column: 1; grid-row: 2; }
+.library-detail { grid-column: 2; grid-row: 2; }
+
+.library-list {
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 4px;
+}
+
+/* Coluna de detalhe: o card da música fica fixo no topo e a letra rola dentro
+   do painel abaixo. */
+.library-detail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* A letra num painel delimitado, ocupando a altura toda da coluna — assim o
+   espaço que sobra numa música curta lê como área de trabalho, não como vazio. */
+.lyrics-pane {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin-top: 12px;
+  padding: 10px 6px;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  background: var(--overlay-1);
+}
+
+/* ─── Item da biblioteca (sem thumbnail) ─────────────── */
+.library-item {
+  position: relative;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-glass);
+  background: var(--overlay-3);
+  transition: var(--transition);
+}
+.library-item:hover {
+  background: var(--overlay-5);
+  border-color: var(--overlay-8);
+}
+.library-item.active {
+  background: rgba(108, 58, 237, 0.14);
+  border-color: rgba(139, 92, 246, 0.45);
+}
+.library-item-title {
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding-right: 28px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.library-item-sub {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.library-item-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+/* Na lista de letras, as ações aparecem só no item aberto (ou sob o cursor):
+   a música escolhida já abre ao lado, então cabe o dobro de títulos na tela.
+   Nos outros filtros os botões continuam sempre visíveis. */
+.library-split:not(.single) .library-list .library-item .library-item-actions {
+  display: none;
+}
+.library-split:not(.single) .library-list .library-item.active .library-item-actions,
+.library-split:not(.single) .library-list .library-item:hover .library-item-actions {
+  display: flex;
+}
+/* Menu ⋮ no canto do card. */
+.library-item-menu {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.library-item-menu:hover {
+  background: var(--overlay-6);
   color: var(--text-primary);
 }
 
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
+/* Botões de ação dos cards: "Projetar" cheio, o resto contornado. */
+.act-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+.act-btn svg { width: 14px; height: 14px; }
+.act-btn.primary {
+  background: var(--primary);
+  color: #fff;
+}
+.act-btn.primary:hover { background: var(--primary-light); }
+.act-btn.ghost {
+  background: var(--overlay-3);
+  border-color: var(--border-glass);
+  color: var(--text-secondary);
+}
+.act-btn.ghost:hover {
+  background: var(--overlay-6);
+  color: var(--text-primary);
+}
+.act-btn.danger:hover {
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.4);
 }
 
+/* ─── Letras no painel de detalhe (com timestamp) ────── */
+.lyric-row {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 16px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.lyric-row:hover { background: var(--overlay-3); }
+.lyric-row.current {
+  background: rgba(108, 58, 237, 0.18);
+  box-shadow: inset 2px 0 0 var(--primary-light);
+}
+.lyric-time {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+  text-align: right;
+}
+.lyric-text {
+  font-size: 0.94rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.lyric-row.current .lyric-text {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* ─── Roteiro (coluna direita) ───────────────────────── */
+.cockpit-roteiro { padding: 20px 18px; }
+
+.roteiro-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+.roteiro-head h2 {
+  font-family: var(--font-body);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+/* Ação discreta no canto do cabeçalho — não compete com o título. */
+.roteiro-head .toolbar-icon-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+}
+.roteiro-head p {
+  font-size: 0.94rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+/* Aviso de que o roteiro está pausado por um item avulso. */
+.roteiro-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.1);
+  flex-shrink: 0;
+}
+.roteiro-notice p {
+  font-size: 0.82rem;
+  color: var(--warning);
+}
+
+.roteiro-list {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+  margin: 0 -6px;
+  padding: 0 6px;
+}
+
+/* Cada passo do roteiro: alça de arraste, checkbox, rótulo, ícone. */
+.roteiro-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 2px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: grab;
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+.roteiro-step:hover { background: var(--overlay-3); }
+.roteiro-step.current {
+  background: rgba(108, 58, 237, 0.3);
+  border-color: rgba(139, 92, 246, 0.6);
+}
+.roteiro-step.skipped { opacity: 0.4; }
+.roteiro-step.dragging { opacity: 0.4; }
+.roteiro-step.drag-over { border-style: dashed; border-color: var(--overlay-8); }
+.roteiro-grip {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.roteiro-step-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.94rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.roteiro-step.current .roteiro-step-label { font-weight: 600; }
+.roteiro-step.skipped .roteiro-step-label { text-decoration: line-through; }
+.roteiro-step-kind {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.roteiro-step-kind svg { width: 16px; height: 16px; }
+.roteiro-step.current .roteiro-step-kind { color: var(--primary-light); }
+
+/* Tirar do roteiro: só aparece quando o passo está sob o cursor. */
+.roteiro-step-remove {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  flex-shrink: 0;
+  transition: var(--transition);
+}
+.roteiro-step-remove svg { width: 15px; height: 15px; }
+.roteiro-step:hover .roteiro-step-remove { opacity: 1; }
+.roteiro-step-remove:hover { background: var(--overlay-6); color: var(--danger); }
+
+.roteiro-empty {
+  padding: 28px 8px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+/* ─── Dock (barra inferior flutuante) ────────────────── */
+.cockpit-dock {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin: 0 24px;
+  padding: 14px 20px;
+  background: var(--overlay-2);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  flex-shrink: 0;
+}
+
+/* Miniatura ao vivo da projeção (iframe em escala). */
+.dock-preview {
+  width: 168px;
+  height: 92px;
+  border-radius: 10px;
+  border: 1px solid var(--border-glass);
+  background: #000;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+}
+.dock-preview iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  transform: scale(0.0875);
+  transform-origin: top left;
+  border: none;
+  pointer-events: none;
+}
+
+/* Centro: "No ar", linha atual e os controles de transporte. */
+.dock-center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.dock-nowplaying {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dock-subline {
+  font-size: 0.94rem;
+  color: var(--text-muted);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Barra de posição da mídia no ar (ocupa o lugar da linha de apoio). */
+.dock-seek {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(460px, 100%);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.dock-seek .slider { flex: 1; }
+.dock-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.dock-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--border-glass);
+  background: var(--overlay-3);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+.dock-btn svg { width: 15px; height: 15px; }
+.dock-btn:hover {
+  background: var(--overlay-6);
+  color: var(--text-primary);
+}
+.dock-btn.primary {
+  background: var(--primary);
+  border-color: transparent;
+  color: #fff;
+}
+.dock-btn.primary:hover { background: var(--primary-light); }
+.dock-btn.danger:hover {
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* Direita: volume em cima, timer embaixo. */
+.dock-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.dock-volume {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+}
+.dock-volume svg { width: 18px; height: 18px; flex-shrink: 0; }
+.dock-volume .slider { width: 140px; }
+.dock-timer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+.dock-timer-value {
+  padding: 7px 14px;
+  border-radius: 9px;
+  border: 1px solid var(--border-glass);
+  background: var(--overlay-3);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.dock-timer-value:hover { background: var(--overlay-6); }
+.dock-timer-value.running {
+  border-color: rgba(139, 92, 246, 0.6);
+  color: var(--primary-light);
+}
+
+/* ─── Cabeçalho de seção da biblioteca ───────────────── */
+.library-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.library-header h2 { font-size: 1.15rem; }
+
+/* ─── Topbar (used inside library sections) ──────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.topbar h1 {
+  font-size: 1.4rem;
+}
+
+/* ─── Settings modal (sub-tabs) ─────────────────────── */
+.settings-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+.settings-modal {
+  background: #1A1230;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-xl);
+  width: 100%;
+  max-width: 640px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.settings-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 0;
+}
+.settings-modal-head h2 { margin: 0; }
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 16px 24px 0;
+  border-bottom: 1px solid var(--border-glass);
+}
+.settings-tab {
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: var(--transition);
+}
+.settings-tab:hover { color: var(--text-primary); }
+.settings-tab.active {
+  color: var(--primary-light);
+  border-bottom-color: var(--primary);
+}
+.settings-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+/* ─── Roteiro column (right) ─────────────────────────── */
+.roteiro-header {
+  padding: 16px 16px 0;
+}
+.roteiro-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* ─── Sidebar link (still used in modals and pickers) ── */
 .sidebar-link {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 500;
   transition: var(--transition);
   cursor: pointer;
@@ -476,24 +1271,6 @@ textarea.input-field {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-}
-
-.main-content {
-  margin-left: 260px;
-  padding: 32px;
-  min-height: 100vh;
-}
-
-/* ─── Top Bar ────────────────────────────────────────── */
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 32px;
-}
-
-.topbar h1 {
-  font-size: 1.75rem;
 }
 
 /* ─── Badge ──────────────────────────────────────────── */
@@ -585,7 +1362,7 @@ th, td {
 }
 
 th {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--overlay-2);
   color: var(--text-secondary);
   font-weight: 600;
   font-size: 0.8rem;
@@ -594,7 +1371,7 @@ th {
 }
 
 tr {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--overlay-4);
   transition: var(--transition);
 }
 
@@ -603,7 +1380,7 @@ tr:last-child {
 }
 
 tr:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--overlay-1);
 }
 
 /* ─── Toast / Notification ───────────────────────────── */
@@ -698,9 +1475,9 @@ tr:hover {
 /* ─── Skeleton Loader ────────────────────────────────── */
 .skeleton {
   background: linear-gradient(90deg,
-    rgba(255,255,255,0.04) 25%,
-    rgba(255,255,255,0.08) 50%,
-    rgba(255,255,255,0.04) 75%);
+    var(--overlay-2) 25%,
+    var(--overlay-5) 50%,
+    var(--overlay-2) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease infinite;
   border-radius: var(--radius-sm);
@@ -719,28 +1496,87 @@ tr:hover {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--overlay-8);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--overlay-10);
 }
 
-/* ─── Responsive ─────────────────────────────────────── */
-@media (max-width: 768px) {
-  .sidebar {
-    transform: translateX(-100%);
+/* ─── Responsive ─────────────────────────────────────────
+   O painel é operado ao vivo, então nada some sem ter para onde ir: em telas
+   estreitas o roteiro vira uma gaveta (botão na barra) em vez de desaparecer. */
+
+/* Botão que abre a gaveta do roteiro: só existe quando ela existe. */
+.roteiro-toggle { display: none; }
+.roteiro-backdrop { display: none; }
+
+@media (max-width: 1500px) {
+  .cockpit-body { grid-template-columns: 1fr 340px; }
+  .library-split { grid-template-columns: minmax(0, 340px) minmax(0, 1fr); }
+  .toolbar-search { flex-basis: 320px; }
+}
+
+@media (max-width: 1200px) {
+  .roteiro-toggle { display: flex; }
+
+  /* Roteiro vira gaveta sobre o conteúdo. */
+  .cockpit-body { grid-template-columns: 1fr; }
+  .cockpit-roteiro {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 380px;
+    max-width: 88vw;
+    z-index: 160;
+    border-radius: 0;
+    /* Sobreposta ao conteúdo, a gaveta precisa ser opaca: a cor do fundo da
+       página por baixo da mesma camada translúcida do card. */
+    background-color: var(--bg-deep);
+    background-image: linear-gradient(var(--overlay-2), var(--overlay-2));
+    transform: translateX(100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.45);
   }
-  .sidebar.open {
-    transform: translateX(0);
+  .cockpit-roteiro.open { transform: none; }
+  .roteiro-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 150;
+    background: rgba(0, 0, 0, 0.5);
   }
-  .main-content {
-    margin-left: 0;
-    padding: 20px;
+
+  .toolbar-brand { display: none; }
+}
+
+@media (max-width: 980px) {
+  /* Sem espaço para a letra ao lado: a lista ocupa o card inteiro. */
+  .library-split { grid-template-columns: minmax(0, 1fr); }
+  .library-detail { display: none; }
+  .filter-tab { padding: 12px 14px; }
+  .filter-tab .filter-label { display: none; }
+  .toolbar-connections { display: none; }
+}
+
+@media (max-width: 760px) {
+  .cockpit-toolbar { flex-wrap: wrap; height: auto; padding: 12px 16px; gap: 10px; }
+  .toolbar-search { order: 3; flex-basis: 100%; }
+  .cockpit-body { padding: 0 16px; }
+
+  .cockpit-dock {
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 0 16px;
+    padding: 12px 16px;
   }
-  .grid-2 {
-    grid-template-columns: 1fr;
-  }
+  .dock-preview { display: none; }
+  .dock-right { flex-direction: row; align-items: center; gap: 18px; width: 100%; justify-content: center; }
+  .dock-controls { flex-wrap: wrap; justify-content: center; }
+  .toolbar-cta span { display: none; }
+
+  .grid-2 { grid-template-columns: 1fr; }
 }
 
 /* ─── Login Page ─────────────────────────────────────── */
@@ -871,7 +1707,7 @@ tr:hover {
   justify-content: space-between;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--overlay-4);
 }
 
 /* ─── Color Picker ───────────────────────────────────── */
@@ -949,7 +1785,7 @@ input[type="color"]::-webkit-color-swatch {
 .tabs {
   display: flex;
   gap: 4px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--overlay-2);
   padding: 4px;
   border-radius: var(--radius-md);
   margin-bottom: 24px;

@@ -48,6 +48,7 @@ export async function PUT(
         id: item.id,
         type: item.type,
         refId: item.refId,
+        ...(item.skip ? { skip: true } : {}),
       }));
     }
     service.updatedAt = new Date().toISOString();

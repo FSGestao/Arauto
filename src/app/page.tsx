@@ -100,22 +100,7 @@ export default function LoginPage() {
       <div className="login-card glass-card">
         {/* Logo / Title */}
         <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div
-            style={{
-              width: 64,
-              height: 64,
-              margin: "0 auto 16px",
-              background: "linear-gradient(135deg, var(--primary), var(--secondary))",
-              borderRadius: "var(--radius-lg)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "1.8rem",
-              boxShadow: "0 8px 30px rgba(108,58,237,0.3)",
-            }}
-          >
-            🎵
-          </div>
+          <img src="/arauto-logo.png" alt="" width={64} height={64} style={{ display: "block", margin: "0 auto 12px" }} />
           <h1 className="login-title">Arauto</h1>
           <p className="login-subtitle">
             {hasUsers ? "Faça login para acessar o painel" : "Crie a conta local de administração deste computador"}

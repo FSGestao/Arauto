@@ -42,6 +42,19 @@ export interface Announcement {
   updatedAt: string;
 }
 
+/* ─── Modelos de aviso ───────────────────────────────────
+   Um rascunho reaproveitável de aviso com variáveis tipo {{data}} ou
+   {{pregador}} no título/conteúdo. Ao usar o modelo, o operador preenche as
+   variáveis encontradas e um Announcement normal é criado com o texto já
+   substituído — o modelo em si nunca vai pro roteiro/projeção. */
+export interface AnnouncementTemplate {
+  id: number;
+  title: string; // pode conter {{variavel}}
+  content: string; // pode conter {{variavel}}
+  createdAt: string;
+  updatedAt: string;
+}
+
 /* ─── Mídia (áudio/vídeo) ────────────────────────────────
    Diferente de `Announcement` com mediaFile: um item de mídia é uma peça
    de áudio ou vídeo com controles próprios (volume, loop, progresso) —
@@ -65,6 +78,7 @@ export interface ServiceItem {
   id: string; // uuid — identidade estável do item dentro do roteiro (independente do refId)
   type: ServiceItemType;
   refId: number; // id da Song, Announcement ou MediaItem referenciada
+  skip?: boolean; // desmarcado no roteiro: fica salvo no culto, mas não entra na apresentação
 }
 
 export interface Service {

@@ -2,167 +2,39 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { io, Socket } from "socket.io-client";
-
-interface Settings {
-  name: string;
-  primaryColor: string;
-  secondaryColor: string;
-  bgColor: string;
-  textColor: string;
-  logoUrl: string | null;
-}
-
-interface UserInfo {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-}
-
-type MediaType = "none" | "image" | "video";
-
-interface Announcement {
-  id: number;
-  title: string;
-  content: string;
-  active: boolean;
-  mediaType: MediaType;
-  mediaFile: string | null;
-  createdAt: string;
-}
-
-interface LyricLine {
-  startMs: number;
-  endMs: number;
-  text: string;
-  order: number;
-}
-
-interface Song {
-  id: number;
-  title: string;
-  artist: string | null;
-  youtubeUrl: string | null;
-  youtubeId: string | null;
-  lyrics: LyricLine[];
-  _count?: { lyrics: number };
-}
-
-interface MediaItem {
-  id: number;
-  title: string;
-  kind: "audio" | "video";
-  file: string;
-  loop: boolean;
-  volume: number;
-}
-
-interface StepSummary {
-  kind: "lyrics" | "announcement" | "media";
-  label: string;
-  sublabel: string;
-  skip: boolean;
-}
-
-interface ServiceProgress {
-  id: number;
-  title: string;
-  stepIndex: number;
-  totalSteps: number;
-  steps: StepSummary[];
-}
-
-interface LiveState {
-  mode: "idle" | "lyrics" | "announcement" | "media" | "countdown";
-  song: Song | null;
-  lyricIndex: number;
-  isPlaying: boolean;
-  startedAt: number | null;
-  announcement: Announcement | null;
-  media: MediaItem | null;
-  nextMedia: string | null;
-  countdownEndsAt: number | null;
-  countdownTitle: string | null;
-  service: ServiceProgress | null;
-  interjecting: boolean;
-  volume: number;
-  background: string | null;
-  mediaPaused: boolean;
-}
-
-type ServiceItemType = "song" | "announcement" | "media";
-
-interface ServiceItem {
-  id: string;
-  type: ServiceItemType;
-  refId: number;
-}
-
-interface Service {
-  id: number;
-  title: string;
-  date: string | null;
-  items: ServiceItem[];
-}
-
-type Tab = "projecao" | "services" | "announcements" | "songs" | "media" | "settings";
-
-/** Ícone e rótulo por tipo de item — mesmos símbolos em todo o painel, pra
- *  o operador reconhecer o tipo de conteúdo sem ler. */
-const STEP_ICON: Record<string, string> = {
-  lyrics: "🎵",
-  announcement: "📢",
-  media: "🎬",
-};
-
-const STEP_LABEL: Record<string, string> = {
-  lyrics: "Música",
-  announcement: "Aviso",
-  media: "Mídia",
-  countdown: "Contagem regressiva",
-  idle: "Tela limpa",
-};
-
-/** Formata milissegundos restantes como mm:ss ou h:mm:ss — usado tanto no
- * painel do operador quanto (via a mesma lógica) na tela de projeção. */
-function formatCountdown(ms: number): string {
-  const total = Math.max(0, Math.ceil(ms / 1000));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-/** Formata segundos como m:ss (usado na barra de progresso da mídia). */
-function formatTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-function getAuthHeaders(): HeadersInit {
-  const match = document.cookie.match(/auth-token=([^;]+)/);
-  const token = match ? match[1] : "";
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-  };
-}
-
-function getAuthToken(): string {
-  const match = document.cookie.match(/auth-token=([^;]+)/);
-  return match ? match[1] : "";
-}
+import type {
+  Settings,
+  UserInfo,
+  Announcement,
+  AnnouncementTemplate,
+  Song,
+  MediaItem,
+  LiveState,
+  ServiceItemType,
+  ServiceItem,
+  Service,
+  LibraryFilter,
+} from "./types";
+import { getAuthHeaders, getAuthToken, formatCountdown, formatTime, formatTimestamp, STEP_LABEL } from "./utils";
+import { Icon } from "./components/Icon";
+import { EditableCurrentLine } from "./components/EditableCurrentLine";
+import { GlobalSearch } from "./components/GlobalSearch";
+import { CountdownControl } from "./components/CountdownControl";
+import { MediaModal } from "./components/MediaModal";
+import { SongModal, LyricsEditorModal } from "./components/SongModals";
+import { AnnouncementModal, TemplateModal, UseTemplateModal } from "./components/AnnouncementModals";
+import { ServiceModal, ServiceEditorModal } from "./components/ServiceModals";
+import { SettingsModal } from "./components/SettingsModal";
 
 export default function DashboardPage() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>("projecao");
+  const [filter, setFilter] = useState<LibraryFilter>("songs");
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   // Data
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [templates, setTemplates] = useState<AnnouncementTemplate[]>([]);
   const [songs, setSongs] = useState<Song[]>([]);
   const [mediaLibrary, setMediaLibrary] = useState<MediaItem[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -200,6 +72,8 @@ export default function DashboardPage() {
 
   // Modals
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<AnnouncementTemplate | "new" | null>(null);
+  const [templateToUse, setTemplateToUse] = useState<AnnouncementTemplate | null>(null);
   const [showSongModal, setShowSongModal] = useState(false);
   const [showLyricsModal, setShowLyricsModal] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
@@ -213,6 +87,19 @@ export default function DashboardPage() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   // Busca global (Ctrl+K) — acessível de qualquer aba, sem tirar a mão do teclado.
   const [showSearch, setShowSearch] = useState(false);
+  // Popover da contagem regressiva, aberto a partir do Timer na dock.
+  const [showCountdownPanel, setShowCountdownPanel] = useState(false);
+  // Filtro de texto da biblioteca (campo no topo da coluna da esquerda).
+  const [librarySearch, setLibrarySearch] = useState("");
+  // Texto digitado na busca da toolbar — abre a busca global já preenchida.
+  const [globalQuery, setGlobalQuery] = useState("");
+  // Culto que a coluna do roteiro está mostrando quando nada está no ar.
+  const [activeServiceId, setActiveServiceId] = useState<number | null>(null);
+  // Em telas estreitas o roteiro vira uma gaveta; isto diz se ela está aberta.
+  const [roteiroOpen, setRoteiroOpen] = useState(false);
+  // Música aberta na coluna de detalhe — é a que se está PREPARANDO, que nem
+  // sempre é a que está no ar (live.song).
+  const [detailSongId, setDetailSongId] = useState<number | null>(null);
 
   // Toast
   const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -275,6 +162,13 @@ export default function DashboardPage() {
       .catch(console.error);
   }, []);
 
+  const fetchTemplates = useCallback(() => {
+    fetch("/api/announcement-templates", { headers: getAuthHeaders() })
+      .then((r) => r.json())
+      .then(setTemplates)
+      .catch(console.error);
+  }, []);
+
   const fetchSongs = useCallback(() => {
     fetch("/api/songs", { headers: getAuthHeaders() })
       .then((r) => r.json())
@@ -299,10 +193,11 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!user) return;
     fetchAnnouncements();
+    fetchTemplates();
     fetchSongs();
     fetchServices();
     fetchMedia();
-  }, [user, fetchAnnouncements, fetchSongs, fetchServices, fetchMedia]);
+  }, [user, fetchAnnouncements, fetchTemplates, fetchSongs, fetchServices, fetchMedia]);
 
   // ─── Busca global (Ctrl+K / Cmd+K) ────────────────────
   // Funciona de qualquer aba, sem precisar clicar em nada antes — é o "achar
@@ -431,6 +326,7 @@ export default function DashboardPage() {
       | { kind: "media"; media: MediaItem }
     > = [];
     for (const item of service.items) {
+      if (item.skip) continue; // desmarcado no roteiro: não entra nesta apresentação
       if (item.type === "song") {
         const song = songs.find((s) => s.id === item.refId);
         if (!song) continue;
@@ -455,10 +351,32 @@ export default function DashboardPage() {
       return;
     }
     socketRef.current?.emit("admin:startService", { id: service.id, title: service.title, steps });
-    // Sem isso, quem clica "Apresentar" na aba Cultos não vê nenhuma mudança
-    // na tela (o resultado só aparece na aba Projeção) — parece que "não fez nada".
-    setTab("projecao");
   }
+  // ─── Roteiro em preparo (culto ainda não apresentado) ──
+  // Edita os itens do culto salvo — é o que a coluna da direita mostra
+  // enquanto nada está no ar.
+  async function saveServiceItems(service: Service, items: ServiceItem[], okMessage?: string) {
+    const res = await fetch(`/api/services/${service.id}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ items }),
+    });
+    if (res.ok) {
+      fetchServices();
+      if (okMessage) showToast("success", okMessage);
+    } else {
+      showToast("error", "Erro ao salvar o roteiro");
+    }
+  }
+
+  function addToRoteiro(service: Service | null, type: ServiceItemType, refId: number, label: string) {
+    if (!service) {
+      showToast("error", "Crie um culto primeiro (filtro Cultos)");
+      return;
+    }
+    saveServiceItems(service, [...service.items, { id: crypto.randomUUID(), type, refId }], `"${label}" foi para ${service.title}`);
+  }
+
   function roteiroNext() {
     socketRef.current?.emit("roteiro:next");
   }
@@ -576,13 +494,11 @@ export default function DashboardPage() {
     );
   }
 
-  const sidebarLinks: { id: Tab; icon: string; label: string }[] = [
-    { id: "projecao", icon: "📽️", label: "Projeção" },
-    { id: "services", icon: "🗓️", label: "Cultos" },
-    { id: "announcements", icon: "📢", label: "Avisos" },
-    { id: "songs", icon: "🎵", label: "Músicas" },
-    { id: "media", icon: "🎬", label: "Mídia" },
-    { id: "settings", icon: "⚙️", label: "Configurações" },
+  const filters: { id: LibraryFilter; icon: string; label: string }[] = [
+    { id: "songs", icon: "lyrics", label: "Letras" },
+    { id: "announcements", icon: "bell", label: "Avisos" },
+    { id: "media", icon: "media", label: "Mídia" },
+    { id: "services", icon: "layers", label: "Cultos" },
   ];
 
   const currentLyricText =
@@ -598,138 +514,841 @@ export default function DashboardPage() {
       ? live.song.lyrics[live.lyricIndex + 1].text
       : null;
 
+  // Culto que a coluna da direita mostra enquanto nada está no ar.
+  const activeService = services.find((s) => s.id === activeServiceId) ?? services[0] ?? null;
+  // Música aberta na coluna de detalhe: a escolhida na lista, senão a do ar.
+  const detailSong = songs.find((s) => s.id === detailSongId) ?? live.song ?? songs[0] ?? null;
+
+  const q = librarySearch.trim().toLowerCase();
+  const visibleSongs = songs.filter((s) => !q || s.title.toLowerCase().includes(q) || (s.artist || "").toLowerCase().includes(q));
+  const visibleAnnouncements = announcements.filter((a) => !q || a.title.toLowerCase().includes(q) || a.content.toLowerCase().includes(q));
+  const visibleMedia = mediaLibrary.filter((m) => !q || m.title.toLowerCase().includes(q));
+  const visibleServices = services.filter((sv) => !q || sv.title.toLowerCase().includes(q));
+
+  // Rótulo de um item do roteiro em preparo (o culto salvo, sem estar no ar).
+  function serviceItemLabel(item: ServiceItem): { label: string; icon: string } {
+    if (item.type === "song") {
+      const s = songs.find((x) => x.id === item.refId);
+      return { label: s ? s.title : "(música removida)", icon: "lyrics" };
+    }
+    if (item.type === "media") {
+      const m = mediaLibrary.find((x) => x.id === item.refId);
+      return { label: m ? m.title : "(mídia removida)", icon: "media" };
+    }
+    const a = announcements.find((x) => x.id === item.refId);
+    return { label: a ? a.title : "(aviso removido)", icon: "bell" };
+  }
+
+  // O relógio da dock: o que falta da contagem regressiva, senão a posição
+  // da mídia no ar, senão zerado.
+  const dockTimer =
+    live.mode === "countdown" && live.countdownEndsAt
+      ? formatCountdown(live.countdownEndsAt - Date.now())
+      : live.mode === "media"
+      ? formatTime(mediaProgress.currentTime)
+      : "00:00";
+
   return (
     <>
-      {/* ─── Sidebar ──────────────────────────────────── */}
-      <aside className="sidebar">
-        <div className="sidebar-logo">
-          {settings?.logoUrl ? (
-            <img src={settings.logoUrl} alt={settings.name} />
-          ) : (
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: "var(--radius-sm)",
-                background: "linear-gradient(135deg, var(--primary), var(--secondary))",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "1.2rem",
+      <div className="cockpit">
+        {/* ─── Toolbar ──────────────────────────────────── */}
+        <header className="cockpit-toolbar">
+          <img src="/arauto-logo.png" alt="" className="toolbar-logo" width={31} height={31} />
+          <span className="toolbar-brand">Arauto</span>
+
+          {/* Busca global: digitar aqui abre o modal já com o texto. */}
+          <div className="toolbar-search">
+            <Icon name="search" />
+            <input
+              type="text"
+              placeholder="Buscar música, aviso ou mídia — Ctrl+K"
+              value={globalQuery}
+              onChange={(e) => {
+                setGlobalQuery(e.target.value);
+                if (e.target.value) setShowSearch(true);
               }}
-            >
-              🎵
-            </div>
-          )}
-          <span>{settings?.name || "Arauto"}</span>
-        </div>
+              onClick={() => setShowSearch(true)}
+            />
+          </div>
 
-        <button
-          className="sidebar-link"
-          onClick={() => setShowSearch(true)}
-          style={{ border: "1px solid var(--border-glass)", marginBottom: 4 }}
-        >
-          <span className="icon">🔍</span>
-          <span style={{ flex: 1, textAlign: "left" }}>Buscar</span>
-          <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontFamily: "monospace" }}>Ctrl+K</span>
-        </button>
+          <nav className="toolbar-filters">
+            {filters.map((f) => (
+              <button
+                key={f.id}
+                className={`filter-tab ${filter === f.id ? "active" : ""}`}
+                onClick={() => setFilter(f.id)}
+              >
+                <Icon name={f.icon} />
+                <span className="filter-label">{f.label}</span>
+              </button>
+            ))}
+          </nav>
 
-        <nav className="sidebar-nav">
-          {sidebarLinks.map((link) => (
+          <div className="toolbar-spacer" />
+
+          {/* Quantas telas de cada tipo estão conectadas agora — pra saber
+              ANTES do culto se o projetor está mesmo recebendo o sinal. */}
+          <div
+            className="toolbar-connections"
+            title={`Telas conectadas: ${connections.admin} painel(is), ${connections.projection} projeção, ${connections.stage} stage`}
+          >
+            <span className={`conn-dot ${connections.admin > 1 ? "warn" : "on"}`} />
+            <span className={`conn-dot ${connections.projection > 0 ? "on" : "off"}`} />
+            <span className={`conn-dot ${connections.stage > 0 ? "on" : "off"}`} />
+          </div>
+
+          <div className="toolbar-actions">
             <button
-              key={link.id}
-              className={`sidebar-link ${tab === link.id ? "active" : ""}`}
-              onClick={() => setTab(link.id)}
+              className="toolbar-icon-btn roteiro-toggle"
+              onClick={() => setRoteiroOpen((v) => !v)}
+              title="Roteiro do culto"
             >
-              <span className="icon">{link.icon}</span>
-              {link.label}
+              <Icon name="checklist" />
             </button>
-          ))}
-        </nav>
+            <button className="toolbar-icon-btn" onClick={openStageWindow} title="Abrir Stage View (monitor de confiança)">
+              <Icon name="stage" />
+            </button>
+            <button className="toolbar-icon-btn" onClick={() => setShowSettingsModal(true)} title="Configurações">
+              <Icon name="settings" />
+            </button>
+            <button className="toolbar-cta" onClick={openProjectionWindow}>
+              <Icon name="projection" />
+              Abrir Projeção
+            </button>
+          </div>
+        </header>
 
-        <div style={{ borderTop: "1px solid var(--border-glass)", paddingTop: 16, marginTop: "auto" }}>
-          <button className="btn btn-primary w-full mb-sm" onClick={openProjectionWindow} style={{ gap: 8 }}>
-            📽️ Abrir Projeção
-          </button>
-          <button className="sidebar-link" onClick={handleLogout} style={{ color: "var(--danger)", width: "100%" }}>
-            <span className="icon">🚪</span>
-            Sair
-          </button>
-        </div>
-      </aside>
-
-      {/* ─── Main Content ─────────────────────────────── */}
-      <main className="main-content">
-        {/* ─── PROJEÇÃO (controle em tempo real) ────────── */}
-        {tab === "projecao" && (
-          <>
-            <div className="topbar">
-              <h1>📽️ Projeção</h1>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                {/* Quantas telas de cada tipo estão conectadas agora — pra saber
-                    ANTES do culto se o projetor está mesmo recebendo o sinal. */}
-                <div
-                  style={{ display: "flex", gap: 12, fontSize: "0.78rem", color: "var(--text-muted)", marginRight: 8 }}
-                  title="Telas conectadas agora nesta rede"
-                >
-                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <span
-                      style={{
-                        width: 7,
-                        height: 7,
-                        borderRadius: "50%",
-                        background: connections.projection > 0 ? "var(--success)" : "var(--text-muted)",
-                      }}
-                    />
-                    Projeção {connections.projection}
-                  </span>
-                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <span
-                      style={{
-                        width: 7,
-                        height: 7,
-                        borderRadius: "50%",
-                        background: connections.stage > 0 ? "var(--success)" : "var(--text-muted)",
-                      }}
-                    />
-                    Stage {connections.stage}
-                  </span>
-                </div>
-                <button className="btn btn-secondary" onClick={openProjectionWindow}>
-                  Abrir janela de projeção
-                </button>
-                <button className="btn btn-secondary" onClick={openStageWindow} title="Monitor de confiança para quem está no palco">
-                  🎤 Abrir Stage View
-                </button>
-                <button className="btn btn-danger" onClick={stopAll}>
-                  ✕ Limpar tela
-                </button>
+        {/* ─── Corpo: biblioteca + roteiro ───────────────── */}
+        <div className="cockpit-body">
+          <section className="cockpit-card cockpit-library">
+            <div className={`library-split ${filter === "songs" ? "" : "single"}`}>
+              <div className="library-header">
+                <div className="library-filter">
+                <Icon name="search" />
+                <input
+                  type="text"
+                  placeholder="Buscar ou filtrar..."
+                  value={librarySearch}
+                  onChange={(e) => setLibrarySearch(e.target.value)}
+                />
               </div>
+              {filter === "songs" && (
+                <button className="act-btn primary" onClick={() => setShowSongModal(true)}>
+                  <Icon name="plus" /> Nova Música
+                </button>
+              )}
+              {filter === "announcements" && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="act-btn ghost" onClick={() => setEditingTemplate("new")}>
+                    <Icon name="plus" /> Modelo
+                  </button>
+                  <button className="act-btn primary" onClick={() => setShowAnnouncementModal(true)}>
+                    <Icon name="plus" /> Novo Aviso
+                  </button>
+                </div>
+              )}
+              {filter === "media" && (
+                <button className="act-btn primary" onClick={() => setShowMediaModal(true)}>
+                  <Icon name="plus" /> Enviar Áudio/Vídeo
+                </button>
+              )}
+              {filter === "services" && (
+                <button className="act-btn primary" onClick={() => setShowServiceModal(true)}>
+                  <Icon name="plus" /> Novo Culto
+                </button>
+              )}
+                </div>
+
+              {/* ── Lista (coluna 1) ── */}
+              <div className="library-list">
+                {/* ─── LETRAS ─────────────────────────── */}
+                {filter === "songs" &&
+                  (visibleSongs.length === 0 ? (
+                    <div className="roteiro-empty">
+                      {songs.length === 0 ? "Nenhuma música cadastrada ainda." : "Nada encontrado com esse filtro."}
+                    </div>
+                  ) : (
+                    visibleSongs.map((s) => {
+                      const lineCount = s._count?.lyrics ?? s.lyrics.length;
+                      return (
+                        <div
+                          key={s.id}
+                          className={`library-item ${detailSong?.id === s.id ? "active" : ""}`}
+                          onClick={() => setDetailSongId(s.id)}
+                        >
+                          <button
+                            className="library-item-menu"
+                            title="Remover música"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteSong(s.id);
+                            }}
+                          >
+                            <Icon name="more" />
+                          </button>
+                          <p className="library-item-title">{s.title}</p>
+                          <p className="library-item-sub">
+                            {s.artist || "Sem artista"} · {lineCount} {lineCount === 1 ? "linha" : "linhas"}
+                            {lineCount === 0 && " · sem letra"}
+                          </p>
+                          <div className="library-item-actions">
+                            <button
+                              className="act-btn primary"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                selectSong(s);
+                              }}
+                            >
+                              <Icon name="play" /> Projetar
+                            </button>
+                            <button
+                              className="act-btn ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                addToRoteiro(activeService, "song", s.id, s.title);
+                              }}
+                            >
+                              <Icon name="plus" /> Adicionar ao Roteiro
+                            </button>
+                            <button
+                              className="act-btn ghost"
+                              title="Editar letras"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingSong(s);
+                                setShowLyricsModal(true);
+                              }}
+                            >
+                              <Icon name="pencil" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ))}
+
+                {/* ─── AVISOS ─────────────────────────── */}
+                {filter === "announcements" && (
+                  <>
+                    {/* Modelos reaproveitáveis: um rascunho com {{variáveis}}
+                        (ex.: {{data}}) que vira um aviso de verdade ao ser usado. */}
+                    {templates.length > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <p className="field-label">Modelos de aviso</p>
+                        {templates.map((t) => (
+                          <div key={t.id} className="library-item">
+                            <p className="library-item-title">{t.title}</p>
+                            <p className="library-item-sub">{t.content}</p>
+                            <div className="library-item-actions">
+                              <button className="act-btn primary" onClick={() => setTemplateToUse(t)}>
+                                Usar modelo
+                              </button>
+                              <button className="act-btn ghost" onClick={() => setEditingTemplate(t)}>
+                                <Icon name="pencil" /> Editar
+                              </button>
+                              <button
+                                className="act-btn ghost danger"
+                                onClick={async () => {
+                                  if (!confirm(`Remover o modelo "${t.title}"?`)) return;
+                                  await fetch(`/api/announcement-templates/${t.id}`, { method: "DELETE", headers: getAuthHeaders() });
+                                  fetchTemplates();
+                                }}
+                              >
+                                <Icon name="trash" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        <p className="field-label" style={{ marginTop: 18 }}>
+                          Avisos
+                        </p>
+                      </div>
+                    )}
+
+                    {visibleAnnouncements.length === 0 ? (
+                      <div className="roteiro-empty">
+                        {announcements.length === 0 ? "Nenhum aviso cadastrado ainda." : "Nada encontrado com esse filtro."}
+                      </div>
+                    ) : (
+                      visibleAnnouncements.map((a) => (
+                        <div key={a.id} className={`library-item ${live.announcement?.id === a.id ? "active" : ""}`}>
+                          <button className="library-item-menu" title="Remover aviso" onClick={() => handleDeleteAnnouncement(a.id)}>
+                            <Icon name="more" />
+                          </button>
+                          <p className="library-item-title">{a.title}</p>
+                          <p className="library-item-sub">
+                            {a.active ? "Ativo" : "Inativo"}
+                            {a.mediaType === "image" && " · imagem"}
+                            {a.mediaType === "video" && " · vídeo"}
+                            {a.mediaType === "none" && ` · ${a.content}`}
+                          </p>
+                          <div className="library-item-actions">
+                            <button className="act-btn primary" onClick={() => showAnnouncementLive(a)}>
+                              <Icon name="play" /> Projetar
+                            </button>
+                            <button className="act-btn ghost" onClick={() => addToRoteiro(activeService, "announcement", a.id, a.title)}>
+                              <Icon name="plus" /> Adicionar ao Roteiro
+                            </button>
+                            <button
+                              className="act-btn ghost"
+                              onClick={async () => {
+                                await fetch(`/api/announcements/${a.id}`, {
+                                  method: "PUT",
+                                  headers: getAuthHeaders(),
+                                  body: JSON.stringify({ active: !a.active }),
+                                });
+                                fetchAnnouncements();
+                              }}
+                            >
+                              {a.active ? "Desativar" : "Ativar"}
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </>
+                )}
+
+                {/* ─── MÍDIA ──────────────────────────── */}
+                {filter === "media" &&
+                  (visibleMedia.length === 0 ? (
+                    <div className="roteiro-empty">
+                      {mediaLibrary.length === 0
+                        ? "Nenhum áudio ou vídeo enviado ainda. Envie trilhas, playbacks e vídeos — eles entram no roteiro, tocam avulsos ou viram fundo animado atrás da letra."
+                        : "Nada encontrado com esse filtro."}
+                    </div>
+                  ) : (
+                    visibleMedia.map((m) => (
+                      <div key={m.id} className={`library-item ${live.media?.id === m.id ? "active" : ""}`}>
+                        <button className="library-item-menu" title="Remover mídia" onClick={() => handleDeleteMedia(m.id)}>
+                          <Icon name="more" />
+                        </button>
+                        <p className="library-item-title">{m.title}</p>
+                        <p className="library-item-sub">
+                          {m.kind === "audio" ? "Áudio" : "Vídeo"}
+                          {m.loop && " · em loop"}
+                        </p>
+                        {m.kind === "video" ? (
+                          <video
+                            src={`/api/media/${m.file}`}
+                            controls
+                            preload="metadata"
+                            style={{ width: "100%", borderRadius: "var(--radius-sm)", background: "#000", maxHeight: 160, marginTop: 10 }}
+                          />
+                        ) : (
+                          <audio src={`/api/media/${m.file}`} controls preload="metadata" style={{ width: "100%", marginTop: 10 }} />
+                        )}
+                        <div className="library-item-actions">
+                          <button className="act-btn primary" onClick={() => showMediaLive(m)}>
+                            <Icon name="play" /> Projetar
+                          </button>
+                          <button className="act-btn ghost" onClick={() => addToRoteiro(activeService, "media", m.id, m.title)}>
+                            <Icon name="plus" /> Adicionar ao Roteiro
+                          </button>
+                          {m.kind === "video" && (
+                            <button
+                              className="act-btn ghost"
+                              onClick={() => setBackground(live.background === m.file ? null : m.file)}
+                            >
+                              {live.background === m.file ? "Tirar do fundo" : "Usar como fundo"}
+                            </button>
+                          )}
+                          <label className="act-btn ghost" style={{ cursor: "pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={m.loop}
+                              onChange={async (e) => {
+                                await fetch(`/api/media-library/${m.id}`, {
+                                  method: "PUT",
+                                  headers: getAuthHeaders(),
+                                  body: JSON.stringify({ loop: e.target.checked }),
+                                });
+                                fetchMedia();
+                              }}
+                            />
+                            Loop
+                          </label>
+                        </div>
+                      </div>
+                    ))
+                  ))}
+
+                {/* ─── CULTOS ─────────────────────────── */}
+                {filter === "services" &&
+                  (visibleServices.length === 0 ? (
+                    <div className="roteiro-empty">
+                      {services.length === 0 ? "Nenhum culto cadastrado ainda." : "Nada encontrado com esse filtro."}
+                    </div>
+                  ) : (
+                    visibleServices.map((sv) => (
+                      <div
+                        key={sv.id}
+                        className={`library-item ${activeService?.id === sv.id ? "active" : ""}`}
+                        onClick={() => setActiveServiceId(sv.id)}
+                      >
+                        <p className="library-item-title">{sv.title}</p>
+                        <p className="library-item-sub">
+                          {sv.date ? new Date(sv.date).toLocaleDateString("pt-BR") : "Sem data"} · {sv.items.length}{" "}
+                          {sv.items.length === 1 ? "item" : "itens"}
+                        </p>
+                        <div className="library-item-actions">
+                          <button
+                            className="act-btn primary"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startService(sv);
+                            }}
+                          >
+                            <Icon name="play" /> Apresentar
+                          </button>
+                          <button
+                            className="act-btn ghost"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingService(sv);
+                            }}
+                          >
+                            <Icon name="pencil" /> Editar
+                          </button>
+                          <button
+                            className="act-btn ghost"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const res = await fetch(`/api/services/${sv.id}/duplicate`, {
+                                method: "POST",
+                                headers: getAuthHeaders(),
+                              });
+                              if (res.ok) {
+                                showToast("success", "Culto duplicado");
+                                fetchServices();
+                              }
+                            }}
+                          >
+                            <Icon name="copy" /> Duplicar
+                          </button>
+                          <button
+                            className="act-btn ghost danger"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!confirm("Remover este culto?")) return;
+                              const res = await fetch(`/api/services/${sv.id}`, {
+                                method: "DELETE",
+                                headers: getAuthHeaders(),
+                              });
+                              if (res.ok) {
+                                showToast("success", "Culto removido");
+                                fetchServices();
+                              }
+                            }}
+                          >
+                            <Icon name="trash" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ))}
+              </div>
+
+              {/* ── Detalhe da música: letra com marca de tempo (coluna 2) ── */}
+              {filter === "songs" && (
+                <div className="library-detail">
+                  {!detailSong ? (
+                    <div className="roteiro-empty">Escolha uma música na lista para ver a letra.</div>
+                  ) : (
+                    <>
+                      <div className="library-item" style={{ cursor: "default" }}>
+                        <p className="library-item-title">{detailSong.title}</p>
+                        <p className="library-item-sub">{detailSong.artist || settings?.name || "Arauto"}</p>
+                        <div className="library-item-actions">
+                          <button className="act-btn primary" onClick={() => selectSong(detailSong)}>
+                            <Icon name="play" /> Projetar
+                          </button>
+                          <button
+                            className="act-btn ghost"
+                            onClick={() => addToRoteiro(activeService, "song", detailSong.id, detailSong.title)}
+                          >
+                            <Icon name="plus" /> Adicionar ao Roteiro
+                          </button>
+                          <button
+                            className="act-btn ghost"
+                            onClick={() => {
+                              setEditingSong(detailSong);
+                              setShowLyricsModal(true);
+                            }}
+                          >
+                            <Icon name="pencil" /> Letras
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="lyrics-pane">
+                        {detailSong.lyrics.length === 0 ? (
+                          <div className="roteiro-empty">
+                            Esta música ainda não tem letra.
+                            <br />
+                            Use &ldquo;Letras&rdquo; para escrever ou importar do YouTube.
+                          </div>
+                        ) : (
+                          detailSong.lyrics.map((l, i) => {
+                          const isLive = live.mode === "lyrics" && live.song?.id === detailSong.id && live.lyricIndex === i;
+                          return (
+                            <div
+                              key={i}
+                              className={`lyric-row ${isLive ? "current" : ""}`}
+                              onClick={() => {
+                                if (live.song?.id !== detailSong.id) selectSong(detailSong);
+                                goToLine(i);
+                              }}
+                              title="Clique para colocar esta linha no ar"
+                            >
+                              <span className="lyric-time">[{formatTimestamp(l.startMs)}]</span>
+                              {/* A linha que está no ar pode ser corrigida aqui
+                                  mesmo: corrige na tela e salva na biblioteca. */}
+                              {isLive ? (
+                                <span className="lyric-text" onClick={(e) => e.stopPropagation()}>
+                                  <EditableCurrentLine text={l.text} onSave={editCurrentLine} />
+                                </span>
+                              ) : (
+                                <span className="lyric-text">{l.text}</span>
+                              )}
+                            </div>
+                          );
+                          })
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Fecha a gaveta do roteiro ao clicar fora (só existe em tela
+              estreita, onde o roteiro é sobreposto). */}
+          {roteiroOpen && <div className="roteiro-backdrop" onClick={() => setRoteiroOpen(false)} />}
+
+          {/* ── Coluna direita: Roteiro do Culto ── */}
+          <aside className={`cockpit-card cockpit-roteiro ${roteiroOpen ? "open" : ""}`}>
+            <div className="roteiro-head">
+              <div style={{ minWidth: 0 }}>
+                <h2>Roteiro do Culto</h2>
+                {live.service ? (
+                  <p>
+                    {live.service.title} · {live.service.stepIndex + 1}/{live.service.totalSteps}
+                  </p>
+                ) : services.length > 0 ? (
+                  <select
+                    className="input-field"
+                    style={{ padding: "2px 0", border: "none", background: "none", color: "var(--text-muted)", fontSize: "1.02rem" }}
+                    value={activeService?.id ?? ""}
+                    onChange={(e) => setActiveServiceId(Number(e.target.value))}
+                  >
+                    {services.map((sv) => (
+                      <option key={sv.id} value={sv.id}>
+                        {sv.title}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p>Nenhum culto ainda</p>
+                )}
+              </div>
+              {live.service ? (
+                <button className="toolbar-icon-btn" onClick={() => setShowInsertPanel((v) => !v)} title="Inserir algo agora">
+                  <Icon name={showInsertPanel ? "chevronRight" : "plus"} />
+                </button>
+              ) : (
+                activeService && (
+                  <button className="toolbar-icon-btn" onClick={() => setEditingService(activeService)} title="Editar roteiro">
+                    <Icon name="more" />
+                  </button>
+                )
+              )}
             </div>
 
-            {networkUrls.length > 0 && (
-              <div className="glass-card p-md mb-lg" style={{ fontSize: "0.85rem" }}>
-                <p style={{ color: "var(--text-secondary)", marginBottom: 6 }}>
-                  Projeção — para exibir em outro computador da mesma rede (ex.: o PC ligado ao projetor):
-                </p>
-                {networkUrls.map((u) => (
-                  <p key={u} style={{ fontFamily: "monospace", color: "var(--primary-light)" }}>
-                    {u}
-                  </p>
-                ))}
-                <p style={{ color: "var(--text-secondary)", margin: "10px 0 6px" }}>
-                  Stage View — monitor de confiança, pra abrir num tablet/monitor no palco:
-                </p>
-                {stageUrls.map((u) => (
-                  <p key={u} style={{ fontFamily: "monospace", color: "var(--primary-light)" }}>
-                    {u}
-                  </p>
-                ))}
+            {live.service && live.interjecting && (
+              <div className="roteiro-notice">
+                <p>Exibindo item avulso — roteiro pausado</p>
+                <button className="act-btn ghost" onClick={resumeService}>
+                  Voltar ao roteiro
+                </button>
               </div>
             )}
 
-            {/* Contagem regressiva — funciona com ou sem um culto em
-                apresentação (útil até antes do culto começar). */}
+            {/* Inserir algo na hora sem sair do roteiro (ex.: um versículo),
+                sem precisar cadastrar na biblioteca. Some ao retomar. */}
+            {live.service && showInsertPanel && (
+              <div className="glass-card p-md mb-md" style={{ flexShrink: 0 }}>
+                <p className="field-label">Texto rápido</p>
+                <input
+                  className="input-field"
+                  type="text"
+                  placeholder="Título (ex.: João 3:16)"
+                  value={quickText.title}
+                  onChange={(e) => setQuickText((qt) => ({ ...qt, title: e.target.value }))}
+                  style={{ marginBottom: 6 }}
+                />
+                <textarea
+                  className="input-field"
+                  placeholder="Texto a exibir"
+                  value={quickText.content}
+                  onChange={(e) => setQuickText((qt) => ({ ...qt, content: e.target.value }))}
+                  rows={2}
+                  style={{ marginBottom: 8 }}
+                />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="act-btn primary" onClick={showQuickText}>
+                    Mostrar agora
+                  </button>
+                  <button className="act-btn ghost" onClick={saveQuickTextAsAnnouncement}>
+                    Salvar como aviso
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="roteiro-list">
+              {live.service ? (
+                // ── Roteiro NO AR: arraste pra reordenar, clique pra pular
+                // direto pro item, caixa marcada = vai ao ar. ──
+                live.service.steps.map((step, i) => {
+                  const isCurrent = i === live.service!.stepIndex;
+                  const isDragOver = dragIndex !== null && dragIndex !== i;
+                  return (
+                    <div
+                      key={i}
+                      draggable
+                      className={`roteiro-step ${isCurrent ? "current" : ""} ${step.skip ? "skipped" : ""} ${
+                        dragIndex === i ? "dragging" : isDragOver ? "drag-over" : ""
+                      }`}
+                      onClick={() => roteiroGoToStep(i)}
+                      onDragStart={(e) => {
+                        setDragIndex(i);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (dragIndex !== null && dragIndex !== i) roteiroReorder(dragIndex, i);
+                        setDragIndex(null);
+                      }}
+                      onDragEnd={() => setDragIndex(null)}
+                      title="Arraste pra reordenar · clique pra ir direto pra este item"
+                    >
+                      <span className="roteiro-grip">⠿</span>
+                      <input
+                        type="checkbox"
+                        checked={!step.skip}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => roteiroToggleSkip(i)}
+                        title={step.skip ? "Voltar a exibir este item" : "Ocultar este item nesta apresentação"}
+                      />
+                      <span className="roteiro-step-label">
+                        {i + 1}. {step.label}
+                      </span>
+                      <span className="roteiro-step-kind" title={step.sublabel}>
+                        <Icon name={step.kind === "lyrics" ? "lyrics" : step.kind === "media" ? "media" : "bell"} />
+                      </span>
+                    </div>
+                  );
+                })
+              ) : !activeService ? (
+                <div className="roteiro-empty">
+                  Nenhum culto cadastrado.
+                  <br />
+                  Crie um no filtro Cultos.
+                </div>
+              ) : activeService.items.length === 0 ? (
+                <div className="roteiro-empty">
+                  Roteiro vazio.
+                  <br />
+                  Use &ldquo;Adicionar ao Roteiro&rdquo; nos itens da biblioteca.
+                </div>
+              ) : (
+                // ── Roteiro EM PREPARO: arrastar salva a nova ordem no culto. ──
+                activeService.items.map((item, i) => {
+                  const info = serviceItemLabel(item);
+                  const isDragOver = dragIndex !== null && dragIndex !== i;
+                  return (
+                    <div
+                      key={item.id}
+                      draggable
+                      className={`roteiro-step ${item.skip ? "skipped" : ""} ${
+                        dragIndex === i ? "dragging" : isDragOver ? "drag-over" : ""
+                      }`}
+                      onDragStart={(e) => {
+                        setDragIndex(i);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (dragIndex !== null && dragIndex !== i) {
+                          const next = [...activeService.items];
+                          const [moved] = next.splice(dragIndex, 1);
+                          next.splice(i, 0, moved);
+                          saveServiceItems(activeService, next);
+                        }
+                        setDragIndex(null);
+                      }}
+                      onDragEnd={() => setDragIndex(null)}
+                      title="Arraste pra reordenar"
+                    >
+                      <span className="roteiro-grip">⠿</span>
+                      <input
+                        type="checkbox"
+                        checked={!item.skip}
+                        onChange={() =>
+                          saveServiceItems(
+                            activeService,
+                            activeService.items.map((x) => (x.id === item.id ? { ...x, skip: !x.skip } : x))
+                          )
+                        }
+                        title={item.skip ? "Incluir neste culto" : "Deixar salvo, mas fora deste culto"}
+                      />
+                      <span className="roteiro-step-label">
+                        {i + 1}. {info.label}
+                      </span>
+                      <span className="roteiro-step-kind">
+                        <Icon name={info.icon} />
+                      </span>
+                      <button
+                        className="roteiro-step-remove"
+                        title="Tirar do roteiro"
+                        onClick={() =>
+                          saveServiceItems(
+                            activeService,
+                            activeService.items.filter((x) => x.id !== item.id)
+                          )
+                        }
+                      >
+                        <Icon name="trash" />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {!live.service && activeService && activeService.items.length > 0 && (
+              <button className="act-btn primary" style={{ marginTop: 14, justifyContent: "center" }} onClick={() => startService(activeService)}>
+                <Icon name="play" /> Apresentar culto
+              </button>
+            )}
+          </aside>
+        </div>
+
+        {/* ─── Dock ─────────────────────────────────────── */}
+        <footer className="cockpit-dock">
+          {/* Miniatura ao vivo: é a tela de projeção de verdade, em escala. */}
+          <div className="dock-preview">
+            <iframe src="/projection" title="Prévia da projeção" />
+          </div>
+
+          <div className="dock-center">
+            <p className="dock-nowplaying">
+              No ar:{" "}
+              {live.mode === "idle" && "tela em branco"}
+              {live.mode === "lyrics" && (live.song?.title || "—")}
+              {live.mode === "announcement" && (live.announcement?.title || "—")}
+              {live.mode === "media" && (live.media?.title || "—")}
+              {live.mode === "countdown" && (live.countdownTitle || "contagem regressiva")}
+              {currentLyricText && ` — ${currentLyricText}`}
+            </p>
+            {/* Com mídia no ar, a linha de apoio vira a barra de posição —
+                é o controle que o operador precisa nesse momento. */}
+            {live.mode === "media" && live.media ? (
+              <div className="dock-seek">
+                <span>{formatTime(mediaProgress.currentTime)}</span>
+                <input
+                  className="slider"
+                  type="range"
+                  min={0}
+                  max={Math.max(1, mediaProgress.duration)}
+                  step={0.5}
+                  value={Math.min(mediaProgress.currentTime, mediaProgress.duration || 1)}
+                  onChange={(e) => mediaSeek(parseFloat(e.target.value))}
+                  title="Arraste para buscar uma posição"
+                  aria-label="Posição da mídia"
+                />
+                <span>{formatTime(mediaProgress.duration)}</span>
+              </div>
+            ) : (
+              <p className="dock-subline">
+                {nextLyricLine
+                  ? `A seguir: ${nextLyricLine}`
+                  : live.service
+                  ? `${live.service.title} · passo ${live.service.stepIndex + 1} de ${live.service.totalSteps}`
+                  : STEP_LABEL[live.mode] || ""}
+              </p>
+            )}
+
+            <div className="dock-controls">
+              <button
+                className="dock-btn"
+                onClick={live.service ? roteiroPrev : prevLine}
+                disabled={!live.service && live.mode !== "lyrics"}
+              >
+                <Icon name="chevronLeft" /> Anterior
+              </button>
+              <button
+                className="dock-btn"
+                onClick={live.service ? roteiroNext : nextLine}
+                disabled={!live.service && live.mode !== "lyrics"}
+              >
+                <Icon name="chevronRight" /> Próximo
+              </button>
+              {live.mode === "media" ? (
+                <button className="dock-btn primary" onClick={mediaToggle}>
+                  <Icon name={live.mediaPaused ? "play" : "pause"} /> {live.mediaPaused ? "Retomar" : "Pausar"}
+                </button>
+              ) : (
+                <button
+                  className="dock-btn primary"
+                  onClick={live.isPlaying ? pause : play}
+                  disabled={live.mode !== "lyrics" || !live.song}
+                  title="Avanço automático da letra"
+                >
+                  <Icon name={live.isPlaying ? "pause" : "play"} /> {live.isPlaying ? "Pausar" : "Auto"}
+                </button>
+              )}
+              <button className="dock-btn danger" onClick={stopAll}>
+                <Icon name="trash" /> Limpar
+              </button>
+            </div>
+          </div>
+
+          <div className="dock-right">
+            <div className="dock-volume">
+              <Icon name="volume" />
+              <input
+                className="slider"
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={live.volume}
+                onChange={(e) => setVolume(parseFloat(e.target.value))}
+                title={`Volume ${Math.round(live.volume * 100)}%`}
+                aria-label="Volume"
+              />
+            </div>
+            <div className="dock-timer">
+              <span>Timer</span>
+              <button
+                className={`dock-timer-value ${live.mode === "countdown" ? "running" : ""}`}
+                onClick={() => setShowCountdownPanel((v) => !v)}
+                title="Contagem regressiva"
+              >
+                {dockTimer}
+              </button>
+            </div>
+          </div>
+        </footer>
+
+        {/* Contagem regressiva, aberta pelo Timer da dock */}
+        {showCountdownPanel && (
+          <div style={{ position: "absolute", bottom: 150, right: 24, width: 380, zIndex: 150 }}>
             <CountdownControl
               active={live.mode === "countdown"}
               endsAt={live.countdownEndsAt}
@@ -737,891 +1356,114 @@ export default function DashboardPage() {
               onStart={startCountdown}
               onStop={stopCountdown}
             />
-
-            {live.service && (
-              <div
-                className="glass-card p-md mb-lg"
-                style={{
-                  fontSize: "0.85rem",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  flexWrap: "wrap",
-                  ...(live.interjecting ? { borderLeft: "3px solid var(--warning)" } : {}),
-                }}
-              >
-                {live.interjecting ? (
-                  <p style={{ color: "var(--warning)" }}>
-                    🔀 Exibindo item avulso — roteiro <strong>{live.service.title}</strong> pausado no passo{" "}
-                    {live.service.stepIndex + 1} de {live.service.totalSteps}
-                  </p>
-                ) : (
-                  <p style={{ color: "var(--text-secondary)" }}>
-                    Roteiro em apresentação: <strong>{live.service.title}</strong> — passo {live.service.stepIndex + 1} de{" "}
-                    {live.service.totalSteps}
-                  </p>
-                )}
-                <div style={{ display: "flex", gap: 8 }}>
-                  {live.interjecting && (
-                    <button className="btn btn-primary btn-sm" onClick={resumeService}>
-                      ↩ Voltar ao roteiro
-                    </button>
-                  )}
-                  <button className="btn btn-secondary btn-sm" onClick={() => setShowInsertPanel((v) => !v)}>
-                    {showInsertPanel ? "✕ Fechar inserir" : "➕ Inserir agora"}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Inserir algo na hora sem sair do roteiro: aviso/música já
-                cadastrados, ou um texto rápido (ex.: um versículo) que não
-                precisa ser salvo na biblioteca. Some do ar ao voltar ao roteiro. */}
-            {live.service && showInsertPanel && (
-              <div className="glass-card p-md mb-lg">
-                <p style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: 10, textTransform: "uppercase" }}>
-                  Inserir agora
-                </p>
-                <div className="grid-2">
-                  <div>
-                    <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 6 }}>📝 Texto rápido (ex.: versículo)</p>
-                    <input
-                      className="input-field"
-                      type="text"
-                      placeholder="Título (ex.: João 3:16)"
-                      value={quickText.title}
-                      onChange={(e) => setQuickText((q) => ({ ...q, title: e.target.value }))}
-                      style={{ marginBottom: 6 }}
-                    />
-                    <textarea
-                      className="input-field"
-                      placeholder="Texto a exibir"
-                      value={quickText.content}
-                      onChange={(e) => setQuickText((q) => ({ ...q, content: e.target.value }))}
-                      rows={3}
-                      style={{ marginBottom: 6 }}
-                    />
-
-                    {/* Preview: como vai aparecer na projeção de verdade — mesma
-                        cor de fundo/texto configurada nas Configurações — antes
-                        de decidir se manda ao vivo. */}
-                    {(quickText.title.trim() || quickText.content.trim()) && settings && (
-                      <div
-                        style={{
-                          background: settings.bgColor,
-                          color: settings.textColor,
-                          borderRadius: "var(--radius-sm)",
-                          padding: "14px 16px",
-                          marginBottom: 8,
-                          textAlign: "center",
-                        }}
-                      >
-                        <p style={{ fontSize: "0.65rem", opacity: 0.5, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                          Prévia da projeção
-                        </p>
-                        <p style={{ fontWeight: 700, fontSize: "1rem" }}>{quickText.title.trim() || "Texto"}</p>
-                        {quickText.content.trim() && <p style={{ fontSize: "0.85rem", opacity: 0.85, marginTop: 4 }}>{quickText.content.trim()}</p>}
-                      </div>
-                    )}
-
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button className="btn btn-primary btn-sm" onClick={showQuickText}>
-                        Mostrar agora
-                      </button>
-                      <button className="btn btn-secondary btn-sm" onClick={saveQuickTextAsAnnouncement}>
-                        💾 Salvar como aviso
-                      </button>
-                    </div>
-                  </div>
-                  <div>
-                    <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 6 }}>Da biblioteca</p>
-                    <div style={{ maxHeight: 160, overflowY: "auto" }}>
-                      {announcements.filter((a) => a.active).map((a) => (
-                        <button key={`a-${a.id}`} onClick={() => showAnnouncementLive(a)} className="sidebar-link">
-                          <span>📢 {a.title}</span>
-                        </button>
-                      ))}
-                      {mediaLibrary.map((m) => (
-                        <button key={`m-${m.id}`} onClick={() => showMediaLive(m)} className="sidebar-link">
-                          <span>🎬 {m.title}</span>
-                        </button>
-                      ))}
-                      {songs.map((s) => (
-                        <button key={`s-${s.id}`} onClick={() => selectSong(s)} className="sidebar-link">
-                          <span>🎵 {s.title}</span>
-                        </button>
-                      ))}
-                      {announcements.filter((a) => a.active).length === 0 &&
-                        songs.length === 0 &&
-                        mediaLibrary.length === 0 && (
-                          <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Nada cadastrado ainda</p>
-                        )}
-                    </div>
-                  </div>
-                </div>
-                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 10 }}>
-                  Imagem ou vídeo avulso: cadastre como um aviso novo na aba{" "}
-                  <span
-                    onClick={() => setTab("announcements")}
-                    style={{ color: "var(--primary-light)", cursor: "pointer", textDecoration: "underline" }}
-                  >
-                    Avisos
-                  </span>{" "}
-                  e depois clique nele aqui — o roteiro continua pausado até você voltar.
-                </p>
-              </div>
-            )}
-
-            {live.service ? (
-              // ─── Modo apresentação: duas zonas, cada uma com cabeçalho
-              // dizendo o que é. Coluna 1 = No ar agora / A seguir / Saída.
-              // Coluna 2 = o roteiro inteiro. Flexbox explícito (não grid com
-              // posicionamento automático): cada coluna é montada na mão. ───
-              <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
-                <div style={{ flex: "1 1 400px", display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
-                  {/* ── ZONA 1: o que está no ar ── */}
-                  <div className="panel accent">
-                    <div className="panel-head">
-                      <span className="panel-title">
-                        <span className="dot live" /> No ar agora
-                      </span>
-                      <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
-                        {STEP_LABEL[live.mode] || "—"} · passo {live.service.stepIndex + 1} de {live.service.totalSteps}
-                      </span>
-                    </div>
-                    <div className="panel-body">
-                      <p style={{ fontWeight: 700, fontSize: "1.15rem", marginBottom: currentLyricText || live.mode !== "lyrics" ? 12 : 0 }}>
-                        {live.mode === "lyrics" && (live.song?.title || "—")}
-                        {live.mode === "announcement" && (live.announcement?.title || "—")}
-                        {live.mode === "media" && (live.media?.title || "—")}
-                        {live.mode === "countdown" && "⏱ Contagem regressiva"}
-                        {live.mode === "idle" && "Tela em branco"}
-                      </p>
-
-                      {live.mode === "countdown" && live.countdownEndsAt && (
-                        <div style={{ marginBottom: 12 }}>
-                          <p style={{ fontSize: "2rem", fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
-                            {formatCountdown(live.countdownEndsAt - Date.now())}
-                          </p>
-                          {live.countdownTitle && <p style={{ color: "var(--text-secondary)" }}>{live.countdownTitle}</p>}
-                        </div>
-                      )}
-
-                      {currentLyricText && (
-                        <>
-                          <p className="field-label">Linha atual</p>
-                          <EditableCurrentLine
-                            text={currentLyricText}
-                            onSave={editCurrentLine}
-                            style={{ fontSize: "1.25rem", lineHeight: 1.4, marginBottom: 12 }}
-                          />
-                        </>
-                      )}
-
-                      {/* A música é UM card no roteiro, então a letra seguinte
-                          não tem card próprio: fica aqui, logo abaixo da atual. */}
-                      {nextLyricLine && (
-                        <div style={{ borderTop: "1px solid var(--border-glass)", paddingTop: 10, marginBottom: 12 }}>
-                          <p className="field-label">Próxima linha</p>
-                          <p style={{ fontSize: "0.95rem", color: "var(--text-secondary)" }}>&ldquo;{nextLyricLine}&rdquo;</p>
-                        </div>
-                      )}
-
-                      {live.mode === "announcement" && live.announcement && (
-                        <p style={{ color: "var(--text-secondary)", marginBottom: 12 }}>
-                          {live.announcement.mediaType === "none"
-                            ? live.announcement.content
-                            : live.announcement.mediaType === "image"
-                            ? "🖼️ Imagem em tela cheia"
-                            : "🎬 Vídeo em tela cheia"}
-                        </p>
-                      )}
-
-                      {/* Controles de mídia: play/pause, posição e tempo. */}
-                      {live.mode === "media" && live.media && (
-                        <div style={{ marginBottom: 12 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                            <button className="btn btn-secondary btn-sm" onClick={mediaToggle}>
-                              {live.mediaPaused ? "▶ Retomar" : "⏸ Pausar"}
-                            </button>
-                            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>
-                              {formatTime(mediaProgress.currentTime)} / {formatTime(mediaProgress.duration)}
-                            </span>
-                            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginLeft: "auto" }}>
-                              {live.media.kind === "audio" ? "🔊 Áudio" : "🎬 Vídeo"}
-                              {live.media.loop && " · em loop"}
-                            </span>
-                          </div>
-                          <input
-                            id="media-seek"
-                            className="slider"
-                            type="range"
-                            min={0}
-                            max={Math.max(1, mediaProgress.duration)}
-                            step={0.5}
-                            value={Math.min(mediaProgress.currentTime, mediaProgress.duration || 1)}
-                            onChange={(e) => mediaSeek(parseFloat(e.target.value))}
-                            title="Arraste para buscar uma posição"
-                          />
-                        </div>
-                      )}
-
-                      {live.mode === "lyrics" && live.song && live.song.lyrics.length > 0 && (
-                        <button className="btn btn-secondary btn-sm" style={{ marginBottom: 12 }} onClick={live.isPlaying ? pause : play}>
-                          {live.isPlaying ? "⏸ Pausar avanço automático" : "▶ Avanço automático"}
-                        </button>
-                      )}
-
-                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                        <button className="btn btn-secondary" onClick={roteiroPrev}>
-                          ⏮ Anterior
-                        </button>
-                        <button className="btn btn-primary" style={{ flex: 1 }} onClick={roteiroNext}>
-                          Próximo ⏭
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ── ZONA 2: o que vem depois ── */}
-                  {(() => {
-                    const nextStep = live.service!.steps.slice(live.service!.stepIndex + 1).find((s) => !s.skip);
-                    return (
-                      <div className="panel">
-                        <div className="panel-head">
-                          <span className="panel-title">
-                            <span className="dot next" /> A seguir
-                          </span>
-                        </div>
-                        <div className="panel-body">
-                          {nextStep ? (
-                            <>
-                              <p style={{ fontWeight: 600, fontSize: "1rem" }}>
-                                {STEP_ICON[nextStep.kind]} {nextStep.label}
-                              </p>
-                              <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)" }}>{nextStep.sublabel}</p>
-                            </>
-                          ) : (
-                            <p style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>Este é o último item do culto</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* ── ZONA 3: saída (volume e fundo) ── */}
-                  <div className="panel">
-                    <div className="panel-head">
-                      <span className="panel-title">
-                        <span className="dot ok" /> Saída
-                      </span>
-                    </div>
-                    <div className="panel-body" style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-                      <div style={{ flex: "1 1 180px", minWidth: 0 }}>
-                        <label className="field-label" htmlFor="volume-slider">
-                          Volume · {Math.round(live.volume * 100)}%
-                        </label>
-                        <input
-                          id="volume-slider"
-                          className="slider"
-                          type="range"
-                          min={0}
-                          max={1}
-                          step={0.05}
-                          value={live.volume}
-                          onChange={(e) => setVolume(parseFloat(e.target.value))}
-                        />
-                      </div>
-                      <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-                        <label className="field-label" htmlFor="background-select">
-                          Vídeo de fundo (atrás da letra)
-                        </label>
-                        <select
-                          id="background-select"
-                          className="input-field"
-                          style={{ padding: "8px 12px", fontSize: "0.85rem" }}
-                          value={live.background || ""}
-                          onChange={(e) => setBackground(e.target.value || null)}
-                        >
-                          <option value="">Nenhum (cor sólida)</option>
-                          {mediaLibrary
-                            .filter((m) => m.kind === "video")
-                            .map((m) => (
-                              <option key={m.id} value={m.file}>
-                                {m.title}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── ZONA 4: o roteiro inteiro (kanban) ──
-                    Cada card é um EVENTO (música inteira, aviso ou mídia),
-                    nunca uma linha de letra: dá pra arrastar pra outra
-                    posição, pular direto pra ele (clique) ou ocultar sem
-                    alterar o culto salvo (checkbox). */}
-                <div className="panel" style={{ flex: "0 1 380px", minWidth: 280, maxHeight: 700 }}>
-                  <div className="panel-head" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                      <span className="panel-title">Roteiro · {live.service.title}</span>
-                      <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>
-                        {live.service.stepIndex + 1}/{live.service.totalSteps}
-                      </span>
-                    </div>
-                    {/* Indicador de posição: quanto do culto já passou. */}
-                    <div className="progress-track">
-                      <div
-                        className="progress-fill"
-                        style={{
-                          width: `${((live.service.stepIndex + 1) / Math.max(1, live.service.totalSteps)) * 100}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div className="panel-body tight scroll">
-                    {live.service.steps.map((step, i) => {
-                      const isCurrent = i === live.service!.stepIndex;
-                      const isDragOver = dragIndex !== null && dragIndex !== i;
-                      return (
-                        <div
-                          key={i}
-                          draggable
-                          onClick={() => roteiroGoToStep(i)}
-                          onDragStart={(e) => {
-                            setDragIndex(i);
-                            e.dataTransfer.effectAllowed = "move";
-                          }}
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            if (dragIndex !== null && dragIndex !== i) roteiroReorder(dragIndex, i);
-                            setDragIndex(null);
-                          }}
-                          onDragEnd={() => setDragIndex(null)}
-                          style={{
-                            display: "flex",
-                            alignItems: "flex-start",
-                            gap: 8,
-                            padding: "9px 10px",
-                            borderRadius: 10,
-                            cursor: "grab",
-                            marginBottom: 4,
-                            opacity: step.skip ? 0.4 : dragIndex === i ? 0.4 : 1,
-                            background: isCurrent ? "rgba(108,58,237,0.18)" : "transparent",
-                            border: isCurrent
-                              ? "1px solid rgba(108,58,237,0.4)"
-                              : isDragOver
-                              ? "1px dashed var(--border-glass)"
-                              : "1px solid transparent",
-                            transition: "background 0.2s ease, opacity 0.2s ease",
-                          }}
-                          title="Arraste pra reordenar · clique pra ir direto pra este item"
-                        >
-                          <span style={{ color: "var(--text-muted)", marginTop: 3, fontSize: "0.8rem" }}>⠿</span>
-                          <input
-                            type="checkbox"
-                            checked={!step.skip}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={() => roteiroToggleSkip(i)}
-                            style={{ marginTop: 3 }}
-                            title={step.skip ? "Voltar a exibir este item" : "Ocultar este item nesta apresentação (não apaga do culto salvo)"}
-                          />
-                          <div style={{ minWidth: 0 }}>
-                            <p style={{ fontSize: "0.88rem", fontWeight: isCurrent ? 700 : 500, textDecoration: step.skip ? "line-through" : "none" }}>
-                              {STEP_ICON[step.kind]} {step.label}
-                            </p>
-                            <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                              {step.sublabel}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="grid-2">
-                {/* Now playing */}
-                <div className="glass-card p-lg">
-                  <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 4 }}>No ar agora</p>
-                  <p style={{ fontWeight: 600, marginBottom: 12 }}>
-                    {live.mode === "idle" && "Tela em branco"}
-                    {live.mode === "lyrics" && (live.song?.title || "—")}
-                    {live.mode === "announcement" && (live.announcement?.title || "—")}
-                    {live.mode === "countdown" && "⏱ Contagem regressiva (veja o painel acima)"}
-                  </p>
-                  {currentLyricText && (
-                    <EditableCurrentLine text={currentLyricText} onSave={editCurrentLine} style={{ marginBottom: 16 }} />
-                  )}
-
-                  {live.mode === "lyrics" && live.song && (
-                    <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                      <button className="btn btn-secondary btn-sm" onClick={prevLine}>
-                        ⏮ Anterior
-                      </button>
-                      <button className="btn btn-primary btn-sm" onClick={live.isPlaying ? pause : play}>
-                        {live.isPlaying ? "⏸ Pausar" : "▶ Play"}
-                      </button>
-                      <button className="btn btn-secondary btn-sm" onClick={nextLine}>
-                        Próxima ⏭
-                      </button>
-                    </div>
-                  )}
-
-                  {live.mode === "lyrics" && live.song && (
-                    <div style={{ maxHeight: 220, overflowY: "auto" }}>
-                      {live.song.lyrics.map((l, i) => (
-                        <div
-                          key={i}
-                          onClick={() => goToLine(i)}
-                          style={{
-                            padding: "6px 10px",
-                            borderRadius: 6,
-                            cursor: "pointer",
-                            fontSize: "0.85rem",
-                            background: i === live.lyricIndex ? "rgba(108,58,237,0.18)" : "transparent",
-                            color: i === live.lyricIndex ? "var(--text-primary)" : "var(--text-secondary)",
-                            fontWeight: i === live.lyricIndex ? 600 : 400,
-                          }}
-                        >
-                          {l.text}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Songs & announcements quick access */}
-                <div className="glass-card p-lg">
-                  <p style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: 8, textTransform: "uppercase" }}>
-                    🎵 Músicas
-                  </p>
-                  {songs.length === 0 ? (
-                    <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: 16 }}>Nenhuma música cadastrada</p>
-                  ) : (
-                    <div style={{ marginBottom: 20 }}>
-                      {songs.map((s) => {
-                        const lineCount = s._count?.lyrics ?? s.lyrics.length;
-                        return (
-                          <button
-                            key={s.id}
-                            onClick={() => selectSong(s)}
-                            className="sidebar-link"
-                            style={{
-                              background: live.song?.id === s.id ? "rgba(108,58,237,0.14)" : "transparent",
-                            }}
-                          >
-                            <span>{s.title}</span>
-                            {lineCount === 0 && (
-                              <span style={{ fontSize: "0.75rem", color: "var(--warning)" }}>⚠ sem letra cadastrada</span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  <p style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: 8, textTransform: "uppercase" }}>
-                    📢 Avisos ativos
-                  </p>
-                  {announcements.filter((a) => a.active).length === 0 ? (
-                    <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Nenhum aviso ativo</p>
-                  ) : (
-                    announcements
-                      .filter((a) => a.active)
-                      .map((a) => (
-                        <button
-                          key={a.id}
-                          onClick={() => showAnnouncementLive(a)}
-                          className="sidebar-link"
-                          style={{
-                            background: live.announcement?.id === a.id ? "rgba(108,58,237,0.14)" : "transparent",
-                          }}
-                        >
-                          <span>{a.title}</span>
-                        </button>
-                      ))
-                  )}
-                </div>
-              </div>
-            )}
-          </>
+          </div>
         )}
-
-        {/* ─── CULTOS (roteiro) ──────────────────────────── */}
-        {tab === "services" && (
-          <>
-            <div className="topbar">
-              <h1>🗓️ Cultos</h1>
-              <button className="btn btn-primary" onClick={() => setShowServiceModal(true)}>
-                + Novo Culto
-              </button>
-            </div>
-
-            {services.length === 0 ? (
-              <div className="empty-state glass-card">
-                <div className="icon">🗓️</div>
-                <p>Nenhum culto cadastrado ainda</p>
-                <button className="btn btn-primary" onClick={() => setShowServiceModal(true)}>
-                  Criar Primeiro Culto
-                </button>
-              </div>
-            ) : (
-              <div className="grid-2">
-                {services.map((sv) => (
-                  <div key={sv.id} className="glass-card announcement-card">
-                    <h3>{sv.title}</h3>
-                    <p>
-                      {sv.date ? new Date(sv.date).toLocaleDateString("pt-BR") : "Sem data"} · {sv.items.length}{" "}
-                      {sv.items.length === 1 ? "item" : "itens"}
-                    </p>
-                    <div className="meta" style={{ flexWrap: "wrap", gap: 8 }}>
-                      <button className="btn btn-primary btn-sm" onClick={() => startService(sv)}>
-                        ▶ Apresentar
-                      </button>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => setEditingService(sv)}>
-                          ✏️ Editar
-                        </button>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={async () => {
-                            const res = await fetch(`/api/services/${sv.id}/duplicate`, {
-                              method: "POST",
-                              headers: getAuthHeaders(),
-                            });
-                            if (res.ok) {
-                              showToast("success", "Culto duplicado");
-                              fetchServices();
-                            }
-                          }}
-                        >
-                          🗐 Duplicar
-                        </button>
-                        <button
-                          className="btn btn-danger btn-sm"
-                          onClick={async () => {
-                            if (!confirm("Remover este culto?")) return;
-                            const res = await fetch(`/api/services/${sv.id}`, {
-                              method: "DELETE",
-                              headers: getAuthHeaders(),
-                            });
-                            if (res.ok) {
-                              showToast("success", "Culto removido");
-                              fetchServices();
-                            }
-                          }}
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {showServiceModal && (
-              <ServiceModal
-                onClose={() => setShowServiceModal(false)}
-                onSaved={(created) => {
-                  fetchServices();
-                  setShowServiceModal(false);
-                  showToast("success", "Culto criado! Agora adicione músicas e avisos.");
-                  setEditingService(created);
-                }}
-              />
-            )}
-
-            {editingService && (
-              <ServiceEditorModal
-                service={editingService}
-                songs={songs}
-                announcements={announcements}
-                mediaLibrary={mediaLibrary}
-                onClose={() => setEditingService(null)}
-                onSaved={() => {
-                  fetchServices();
-                  setEditingService(null);
-                  showToast("success", "Roteiro salvo!");
-                }}
-              />
-            )}
-          </>
-        )}
-
-        {/* ─── AVISOS ──────────────────────────────────── */}
-        {tab === "announcements" && (
-          <>
-            <div className="topbar">
-              <h1>📢 Avisos</h1>
-              <button className="btn btn-primary" onClick={() => setShowAnnouncementModal(true)}>
-                + Novo Aviso
-              </button>
-            </div>
-
-            {announcements.length === 0 ? (
-              <div className="empty-state glass-card">
-                <div className="icon">📢</div>
-                <p>Nenhum aviso cadastrado ainda</p>
-                <button className="btn btn-primary" onClick={() => setShowAnnouncementModal(true)}>
-                  Criar Primeiro Aviso
-                </button>
-              </div>
-            ) : (
-              <div className="grid-2">
-                {announcements.map((a) => (
-                  <div key={a.id} className="glass-card announcement-card">
-                    <h3>{a.title}</h3>
-                    {a.mediaType === "image" && a.mediaFile && (
-                      <img src={`/api/media/${a.mediaFile}`} alt={a.title} style={{ width: "100%", borderRadius: "var(--radius-sm)", marginBottom: 8, maxHeight: 140, objectFit: "cover" }} />
-                    )}
-                    {a.mediaType === "video" && a.mediaFile && (
-                      <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 8 }}>🎬 Vídeo anexado</p>
-                    )}
-                    <p>{a.content}</p>
-                    <div className="meta">
-                      <span className={`badge ${a.active ? "badge-approved" : "badge-rejected"}`}>
-                        {a.active ? "Ativo" : "Inativo"}
-                      </span>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={async () => {
-                            await fetch(`/api/announcements/${a.id}`, {
-                              method: "PUT",
-                              headers: getAuthHeaders(),
-                              body: JSON.stringify({ active: !a.active }),
-                            });
-                            fetchAnnouncements();
-                          }}
-                        >
-                          {a.active ? "Desativar" : "Ativar"}
-                        </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => handleDeleteAnnouncement(a.id)}>
-                          Remover
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {showAnnouncementModal && (
-              <AnnouncementModal
-                onClose={() => setShowAnnouncementModal(false)}
-                onSaved={() => {
-                  fetchAnnouncements();
-                  setShowAnnouncementModal(false);
-                  showToast("success", "Aviso criado!");
-                }}
-              />
-            )}
-          </>
-        )}
-
-        {/* ─── MÚSICAS ─────────────────────────────────── */}
-        {tab === "songs" && (
-          <>
-            <div className="topbar">
-              <h1>🎵 Músicas</h1>
-              <button className="btn btn-primary" onClick={() => setShowSongModal(true)}>
-                + Nova Música
-              </button>
-            </div>
-
-            {songs.length === 0 ? (
-              <div className="empty-state glass-card">
-                <div className="icon">🎵</div>
-                <p>Nenhuma música cadastrada ainda</p>
-                <button className="btn btn-primary" onClick={() => setShowSongModal(true)}>
-                  Adicionar Primeira Música
-                </button>
-              </div>
-            ) : (
-              <div className="grid-2">
-                {songs.map((s) => (
-                  <div key={s.id} className="glass-card song-card">
-                    <div className="song-card-header">
-                      <div>
-                        <h3>{s.title}</h3>
-                        {s.artist && <p className="artist">{s.artist}</p>}
-                        <p className="lyrics-count">{s._count?.lyrics || s.lyrics.length} linhas de letra</p>
-                      </div>
-                    </div>
-                    {s.youtubeId && (
-                      <div
-                        style={{
-                          width: "100%",
-                          aspectRatio: "16/9",
-                          borderRadius: "var(--radius-sm)",
-                          overflow: "hidden",
-                          background: "#000",
-                        }}
-                      >
-                        <img
-                          src={`https://img.youtube.com/vi/${s.youtubeId}/mqdefault.jpg`}
-                          alt={s.title}
-                          style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.8 }}
-                        />
-                      </div>
-                    )}
-                    <div className="actions">
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => {
-                          setEditingSong(s);
-                          setShowLyricsModal(true);
-                        }}
-                      >
-                        ✏️ Letras
-                      </button>
-                      <button className="btn btn-danger btn-sm" onClick={() => handleDeleteSong(s.id)}>
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {showSongModal && (
-              <SongModal
-                onClose={() => setShowSongModal(false)}
-                onSaved={() => {
-                  fetchSongs();
-                  setShowSongModal(false);
-                  showToast("success", "Música adicionada!");
-                }}
-              />
-            )}
-
-            {showLyricsModal && editingSong && (
-              <LyricsEditorModal
-                song={editingSong}
-                onClose={() => {
-                  setShowLyricsModal(false);
-                  setEditingSong(null);
-                }}
-                onSaved={() => {
-                  fetchSongs();
-                  setShowLyricsModal(false);
-                  setEditingSong(null);
-                  showToast("success", "Letras salvas!");
-                }}
-              />
-            )}
-          </>
-        )}
-
-        {/* ─── MÍDIA (áudio e vídeo) ───────────────────── */}
-        {tab === "media" && (
-          <>
-            <div className="topbar">
-              <h1>🎬 Mídia</h1>
-              <button className="btn btn-primary" onClick={() => setShowMediaModal(true)}>
-                + Enviar Áudio/Vídeo
-              </button>
-            </div>
-
-            {mediaLibrary.length === 0 ? (
-              <div className="empty-state glass-card">
-                <div className="icon">🎬</div>
-                <p>Nenhum áudio ou vídeo enviado ainda</p>
-                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: 16 }}>
-                  Envie trilhas, playbacks e vídeos institucionais. Eles podem entrar no roteiro do culto,
-                  tocar avulsos, ou servir de fundo animado atrás da letra.
-                </p>
-                <button className="btn btn-primary" onClick={() => setShowMediaModal(true)}>
-                  Enviar Primeiro Arquivo
-                </button>
-              </div>
-            ) : (
-              <div className="grid-2">
-                {mediaLibrary.map((m) => (
-                  <div key={m.id} className="panel">
-                    <div className="panel-head">
-                      <span className="panel-title">
-                        {m.kind === "audio" ? "🔊 Áudio" : "🎬 Vídeo"}
-                      </span>
-                      <button className="btn btn-danger btn-sm" onClick={() => handleDeleteMedia(m.id)}>
-                        Remover
-                      </button>
-                    </div>
-                    <div className="panel-body">
-                      <p style={{ fontWeight: 600, marginBottom: 10 }}>{m.title}</p>
-
-                      {m.kind === "video" ? (
-                        <video
-                          src={`/api/media/${m.file}`}
-                          controls
-                          preload="metadata"
-                          style={{ width: "100%", borderRadius: "var(--radius-sm)", background: "#000", maxHeight: 180 }}
-                        />
-                      ) : (
-                        <audio src={`/api/media/${m.file}`} controls preload="metadata" style={{ width: "100%" }} />
-                      )}
-
-                      <div style={{ display: "flex", gap: 14, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
-                        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem" }}>
-                          <input
-                            type="checkbox"
-                            checked={m.loop}
-                            onChange={async (e) => {
-                              await fetch(`/api/media-library/${m.id}`, {
-                                method: "PUT",
-                                headers: getAuthHeaders(),
-                                body: JSON.stringify({ loop: e.target.checked }),
-                              });
-                              fetchMedia();
-                            }}
-                          />
-                          Repetir em loop
-                        </label>
-                        <button className="btn btn-secondary btn-sm" onClick={() => showMediaLive(m)}>
-                          ▶ Colocar no ar
-                        </button>
-                        {m.kind === "video" && (
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => setBackground(live.background === m.file ? null : m.file)}
-                          >
-                            {live.background === m.file ? "✕ Tirar do fundo" : "🖼 Usar como fundo"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {showMediaModal && (
-              <MediaModal
-                onClose={() => setShowMediaModal(false)}
-                onSaved={() => {
-                  fetchMedia();
-                  setShowMediaModal(false);
-                  showToast("success", "Mídia adicionada!");
-                }}
-              />
-            )}
-          </>
-        )}
-
-        {/* ─── CONFIGURAÇÕES ──────────────────────────── */}
-        {tab === "settings" && settings && (
-          <SettingsPanel settings={settings} onSaved={(s) => { setSettings(s); showToast("success", "Configurações salvas!"); }} />
-        )}
-      </main>
+      </div>
 
       {/* ─── Toast ─────────────────────────────────────── */}
       {toast && <div className={`toast toast-${toast.type}`}>{toast.text}</div>}
+
+      {/* ─── Modais ────────────────────────────────────── */}
+      {showSongModal && (
+        <SongModal
+          onClose={() => setShowSongModal(false)}
+          onSaved={() => {
+            fetchSongs();
+            setShowSongModal(false);
+            showToast("success", "Música adicionada!");
+          }}
+        />
+      )}
+
+      {showLyricsModal && editingSong && (
+        <LyricsEditorModal
+          song={editingSong}
+          onClose={() => {
+            setShowLyricsModal(false);
+            setEditingSong(null);
+          }}
+          onSaved={() => {
+            fetchSongs();
+            setShowLyricsModal(false);
+            setEditingSong(null);
+            showToast("success", "Letras salvas!");
+          }}
+        />
+      )}
+
+      {showAnnouncementModal && (
+        <AnnouncementModal
+          onClose={() => setShowAnnouncementModal(false)}
+          onSaved={() => {
+            fetchAnnouncements();
+            setShowAnnouncementModal(false);
+            showToast("success", "Aviso criado!");
+          }}
+        />
+      )}
+
+      {editingTemplate && (
+        <TemplateModal
+          template={editingTemplate === "new" ? null : editingTemplate}
+          onClose={() => setEditingTemplate(null)}
+          onSaved={() => {
+            fetchTemplates();
+            setEditingTemplate(null);
+            showToast("success", "Modelo salvo!");
+          }}
+        />
+      )}
+
+      {templateToUse && (
+        <UseTemplateModal
+          template={templateToUse}
+          onClose={() => setTemplateToUse(null)}
+          onCreated={() => {
+            fetchAnnouncements();
+            setTemplateToUse(null);
+            showToast("success", "Aviso criado a partir do modelo!");
+          }}
+        />
+      )}
+
+      {showMediaModal && (
+        <MediaModal
+          onClose={() => setShowMediaModal(false)}
+          onSaved={() => {
+            fetchMedia();
+            setShowMediaModal(false);
+            showToast("success", "Mídia adicionada!");
+          }}
+        />
+      )}
+
+      {showServiceModal && (
+        <ServiceModal
+          onClose={() => setShowServiceModal(false)}
+          onSaved={(created) => {
+            fetchServices();
+            setShowServiceModal(false);
+            showToast("success", "Culto criado! Agora adicione músicas e avisos.");
+            setActiveServiceId(created.id);
+            setEditingService(created);
+          }}
+        />
+      )}
+
+      {editingService && (
+        <ServiceEditorModal
+          service={editingService}
+          songs={songs}
+          announcements={announcements}
+          mediaLibrary={mediaLibrary}
+          onClose={() => setEditingService(null)}
+          onSaved={() => {
+            fetchServices();
+            setEditingService(null);
+            showToast("success", "Roteiro salvo!");
+          }}
+        />
+      )}
 
       {/* ─── Busca global ──────────────────────────────── */}
       {showSearch && (
@@ -1629,1040 +1471,38 @@ export default function DashboardPage() {
           songs={songs}
           announcements={announcements}
           mediaLibrary={mediaLibrary}
-          onClose={() => setShowSearch(false)}
+          initialQuery={globalQuery}
+          onClose={() => {
+            setShowSearch(false);
+            setGlobalQuery("");
+          }}
           onPick={(kind, item) => {
             if (kind === "song") selectSong(item as Song);
             else if (kind === "announcement") showAnnouncementLive(item as Announcement);
             else showMediaLive(item as MediaItem);
             setShowSearch(false);
-            setTab("projecao");
+            setGlobalQuery("");
+          }}
+        />
+      )}
+
+      {/* ─── Configurações (modal com sub-abas) ─────────── */}
+      {showSettingsModal && settings && (
+        <SettingsModal
+          settings={settings}
+          networkUrls={networkUrls}
+          stageUrls={stageUrls}
+          onClose={() => setShowSettingsModal(false)}
+          onLogout={handleLogout}
+          onSaved={(s) => {
+            setSettings(s);
+            // Avisa as telas já abertas (projeção, stage): elas carregaram as
+            // cores na abertura e não teriam como saber que mudaram.
+            socketRef.current?.emit("admin:settingsChanged");
+            showToast("success", "Configurações salvas!");
           }}
         />
       )}
     </>
-  );
-}
-
-/* ════════════════════════════════════════════════════════
-   SUB-COMPONENTS (Modals)
-   ════════════════════════════════════════════════════════ */
-
-function AnnouncementModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [mediaFile, setMediaFile] = useState<string | null>(null);
-  const [mediaType, setMediaType] = useState<MediaType>("none");
-  const [uploading, setUploading] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    const form = new FormData();
-    form.append("file", file);
-    const token = document.cookie.match(/auth-token=([^;]+)/)?.[1] || "";
-    const res = await fetch("/api/media/upload", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: form,
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setMediaFile(data.filename);
-      setMediaType(data.mediaType);
-    } else {
-      alert(data.error || "Erro ao enviar arquivo");
-    }
-    setUploading(false);
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    const res = await fetch("/api/announcements", {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ title, content, mediaFile, mediaType }),
-    });
-    if (res.ok) onSaved();
-    setSaving(false);
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Novo Aviso</h2>
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div>
-            <label className="input-label">Título</label>
-            <input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Ex: Culto de Domingo" />
-          </div>
-          <div>
-            <label className="input-label">Conteúdo (opcional se houver imagem/vídeo)</label>
-            <textarea className="input-field" value={content} onChange={(e) => setContent(e.target.value)} placeholder="Descreva o aviso..." />
-          </div>
-          <div>
-            <label className="input-label">Imagem ou vídeo (opcional)</label>
-            <input className="input-field" type="file" accept="image/*,video/*" onChange={handleFileChange} disabled={uploading} />
-            {uploading && <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 4 }}>Enviando...</p>}
-            {mediaFile && !uploading && (
-              <p style={{ fontSize: "0.8rem", color: "var(--success)", marginTop: 4 }}>
-                ✓ {mediaType === "video" ? "Vídeo" : "Imagem"} anexado
-              </p>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-            <button type="submit" className="btn btn-primary" disabled={saving || uploading}>{saving ? "Salvando..." : "Criar Aviso"}</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Linha de letra que vira campo de texto ao clicar — corrige um erro de
- * digitação sem sair da apresentação. Enter salva, Esc cancela. O componente
- * não sabe onde salvar; só chama `onSave`, que cuida do socket + da API.
- */
-function EditableCurrentLine({
-  text,
-  onSave,
-  style,
-}: {
-  text: string;
-  onSave: (text: string) => void;
-  style?: React.CSSProperties;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(text);
-
-  useEffect(() => {
-    if (!editing) setDraft(text);
-  }, [text, editing]);
-
-  function commit() {
-    const trimmed = draft.trim();
-    if (trimmed && trimmed !== text) onSave(trimmed);
-    setEditing(false);
-  }
-
-  if (editing) {
-    return (
-      <div style={{ display: "flex", gap: 8, alignItems: "center", ...style }}>
-        <input
-          className="input-field"
-          autoFocus
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commit();
-            if (e.key === "Escape") {
-              setDraft(text);
-              setEditing(false);
-            }
-          }}
-          onBlur={commit}
-          style={{ flex: 1, fontSize: "inherit" }}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <p
-      onClick={() => setEditing(true)}
-      style={{ color: "var(--text-secondary)", cursor: "pointer", ...style }}
-      title="Clique para corrigir esta linha — atualiza a tela na hora"
-    >
-      &ldquo;{text}&rdquo; <span style={{ opacity: 0.4, fontSize: "0.8em" }}>✏️</span>
-    </p>
-  );
-}
-
-type SearchKind = "song" | "announcement" | "media";
-interface SearchResult {
-  kind: SearchKind;
-  id: number;
-  title: string;
-  sublabel: string;
-  item: Song | Announcement | MediaItem;
-}
-
-/**
- * Busca global (Ctrl+K): um campo só, cobrindo música/aviso/mídia, com
- * resultado a cada tecla (sem "Enter" pra filtrar), navegável por setas, e
- * Enter já coloca no ar. É a resposta direta ao "achar e colocar no ar em
- * menos de 3 segundos" — não dá pra fazer isso rolando três listas separadas.
- */
-function GlobalSearch({
-  songs,
-  announcements,
-  mediaLibrary,
-  onClose,
-  onPick,
-}: {
-  songs: Song[];
-  announcements: Announcement[];
-  mediaLibrary: MediaItem[];
-  onClose: () => void;
-  onPick: (kind: SearchKind, item: Song | Announcement | MediaItem) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  const results: SearchResult[] = (() => {
-    const q = query.trim().toLowerCase();
-    const songResults: SearchResult[] = songs
-      .filter((s) => !q || s.title.toLowerCase().includes(q) || (s.artist || "").toLowerCase().includes(q))
-      .map((s) => ({ kind: "song" as const, id: s.id, title: s.title, sublabel: s.artist || "Música", item: s }));
-    const annResults: SearchResult[] = announcements
-      .filter((a) => !q || a.title.toLowerCase().includes(q) || a.content.toLowerCase().includes(q))
-      .map((a) => ({ kind: "announcement" as const, id: a.id, title: a.title, sublabel: "Aviso", item: a }));
-    const mediaResults: SearchResult[] = mediaLibrary
-      .filter((m) => !q || m.title.toLowerCase().includes(q))
-      .map((m) => ({ kind: "media" as const, id: m.id, title: m.title, sublabel: m.kind === "audio" ? "Áudio" : "Vídeo", item: m }));
-    return [...songResults, ...annResults, ...mediaResults].slice(0, 30);
-  })();
-
-  useEffect(() => {
-    setSelected(0);
-  }, [query]);
-
-  function pick(r: SearchResult) {
-    onPick(r.kind, r.item);
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setSelected((i) => Math.min(results.length - 1, i + 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setSelected((i) => Math.max(0, i - 1));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      if (results[selected]) pick(results[selected]);
-    }
-  }
-
-  const iconFor: Record<SearchKind, string> = { song: "🎵", announcement: "📢", media: "🎬" };
-
-  return (
-    <div className="modal-overlay" onClick={onClose} style={{ alignItems: "flex-start", paddingTop: "12vh" }}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, padding: 0, overflow: "hidden" }}>
-        <input
-          ref={inputRef}
-          className="input-field"
-          style={{ border: "none", borderRadius: 0, borderBottom: "1px solid var(--border-glass)", fontSize: "1.05rem", padding: "16px 20px" }}
-          placeholder="Buscar música, aviso ou mídia..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={handleKeyDown}
-        />
-        <div style={{ maxHeight: "50vh", overflowY: "auto", padding: "6px" }}>
-          {results.length === 0 ? (
-            <p style={{ padding: "20px", textAlign: "center", color: "var(--text-muted)", fontSize: "0.9rem" }}>
-              Nada encontrado
-            </p>
-          ) : (
-            results.map((r, i) => (
-              <div
-                key={`${r.kind}-${r.id}`}
-                onClick={() => pick(r)}
-                onMouseEnter={() => setSelected(i)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "10px 12px",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                  background: i === selected ? "rgba(108,58,237,0.18)" : "transparent",
-                }}
-              >
-                <span style={{ fontSize: "1rem" }}>{iconFor[r.kind]}</span>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <p style={{ fontSize: "0.9rem", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {r.title}
-                  </p>
-                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{r.sublabel}</p>
-                </div>
-                {i === selected && (
-                  <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontFamily: "monospace" }}>Enter ↵</span>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Contagem regressiva — funciona independente de ter um culto em apresentação
- * (ex.: "entra em 5 minutos", antes de qualquer coisa começar). Quando ativa,
- * mostra o relógio rodando e um botão de parar; quando não, o formulário
- * pra escolher duração e uma mensagem opcional.
- */
-function CountdownControl({
-  active,
-  endsAt,
-  title,
-  onStart,
-  onStop,
-}: {
-  active: boolean;
-  endsAt: number | null;
-  title: string | null;
-  onStart: (seconds: number, title: string) => void;
-  onStop: () => void;
-}) {
-  const [minutes, setMinutes] = useState(5);
-  const [label, setLabel] = useState("O culto começa em breve");
-
-  if (active && endsAt) {
-    const remaining = formatCountdown(endsAt - Date.now());
-    const done = endsAt - Date.now() <= 0;
-    return (
-      <div className="panel accent mb-lg">
-        <div className="panel-head">
-          <span className="panel-title">
-            <span className="dot live" /> Contagem regressiva
-          </span>
-          <button className="btn btn-secondary btn-sm" onClick={onStop}>
-            ✕ Parar
-          </button>
-        </div>
-        <div className="panel-body" style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <p style={{ fontSize: "2.2rem", fontWeight: 800, fontVariantNumeric: "tabular-nums", color: done ? "var(--danger)" : "var(--text-primary)" }}>
-            {remaining}
-          </p>
-          {title && <p style={{ color: "var(--text-secondary)" }}>{title}</p>}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="glass-card p-md mb-lg">
-      <p style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: 10, textTransform: "uppercase" }}>
-        ⏱ Contagem regressiva
-      </p>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <input
-          className="input-field"
-          type="number"
-          min={1}
-          max={180}
-          value={minutes}
-          onChange={(e) => setMinutes(Math.max(1, parseInt(e.target.value, 10) || 1))}
-          style={{ width: 80 }}
-        />
-        <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>minutos</span>
-        <input
-          className="input-field"
-          type="text"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="Mensagem (opcional)"
-          style={{ flex: "1 1 200px", minWidth: 160 }}
-        />
-        <button className="btn btn-primary btn-sm" onClick={() => onStart(minutes * 60, label)}>
-          ▶ Iniciar
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function MediaModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [title, setTitle] = useState("");
-  const [file, setFile] = useState<string | null>(null);
-  const [kind, setKind] = useState<"audio" | "video" | null>(null);
-  const [loop, setLoop] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const picked = e.target.files?.[0];
-    if (!picked) return;
-    setError("");
-    setUploading(true);
-    const form = new FormData();
-    form.append("file", picked);
-    const token = document.cookie.match(/auth-token=([^;]+)/)?.[1] || "";
-    const res = await fetch("/api/media/upload", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: form,
-    });
-    const data = await res.json();
-    if (res.ok && (data.mediaType === "audio" || data.mediaType === "video")) {
-      setFile(data.filename);
-      setKind(data.mediaType);
-      // Sugere o nome do arquivo como título, se ainda estiver vazio.
-      if (!title.trim()) setTitle(picked.name.replace(/\.[^.]+$/, ""));
-    } else if (res.ok) {
-      setError("Este arquivo é uma imagem. Imagens entram como Aviso, na aba Avisos.");
-    } else {
-      setError(data.error || "Erro ao enviar arquivo");
-    }
-    setUploading(false);
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!file || !kind) {
-      setError("Envie um arquivo de áudio ou vídeo primeiro");
-      return;
-    }
-    setSaving(true);
-    const res = await fetch("/api/media-library", {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ title, kind, file, loop }),
-    });
-    if (res.ok) onSaved();
-    else setError("Erro ao salvar");
-    setSaving(false);
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Nova Mídia</h2>
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div>
-            <label className="input-label">Arquivo de áudio ou vídeo *</label>
-            <input
-              className="input-field"
-              type="file"
-              accept="audio/*,video/*"
-              onChange={handleFileChange}
-              disabled={uploading}
-            />
-            <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: 4 }}>
-              Áudio: mp3, wav, ogg, m4a (até 100 MB) · Vídeo: mp4, webm, ogv (até 300 MB)
-            </p>
-            {uploading && <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 4 }}>Enviando...</p>}
-            {file && !uploading && (
-              <p style={{ fontSize: "0.8rem", color: "var(--success)", marginTop: 4 }}>
-                ✓ {kind === "audio" ? "Áudio" : "Vídeo"} enviado
-              </p>
-            )}
-          </div>
-          <div>
-            <label className="input-label">Nome</label>
-            <input
-              className="input-field"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              placeholder="Ex: Trilha de abertura"
-            />
-          </div>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.9rem" }}>
-            <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
-            Repetir em loop (útil pra fundo animado e trilha de espera)
-          </label>
-          {error && <p style={{ fontSize: "0.85rem", color: "var(--danger)" }}>{error}</p>}
-          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-            <button type="submit" className="btn btn-primary" disabled={saving || uploading || !file}>
-              {saving ? "Salvando..." : "Adicionar Mídia"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function SongModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [title, setTitle] = useState("");
-  const [artist, setArtist] = useState("");
-  const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    const res = await fetch("/api/songs", {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ title, artist, youtubeUrl }),
-    });
-    if (res.ok) onSaved();
-    setSaving(false);
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Nova Música</h2>
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div>
-            <label className="input-label">Título da Música *</label>
-            <input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Ex: Grande é o Senhor" />
-          </div>
-          <div>
-            <label className="input-label">Artista</label>
-            <input className="input-field" value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Ex: Adhemar de Campos" />
-          </div>
-          <div>
-            <label className="input-label">URL do YouTube</label>
-            <input className="input-field" value={youtubeUrl} onChange={(e) => setYoutubeUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=..." />
-            <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 4 }}>
-              Cole a URL para importar legendas automaticamente.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Salvando..." : "Adicionar Música"}</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function LyricsEditorModal({ song, onClose, onSaved }: { song: Song; onClose: () => void; onSaved: () => void }) {
-  const [lyrics, setLyrics] = useState<LyricLine[]>(song.lyrics || []);
-  const [saving, setSaving] = useState(false);
-  const [fetching, setFetching] = useState(false);
-  const [bulkText, setBulkText] = useState("");
-  const [mode, setMode] = useState<"editor" | "bulk">("editor");
-
-  async function fetchFromYoutube() {
-    if (!song.youtubeUrl) return alert("Esta música não tem URL do YouTube");
-    setFetching(true);
-    try {
-      const res = await fetch("/api/songs/fetch-lyrics", {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ youtubeUrl: song.youtubeUrl }),
-      });
-      const data = await res.json();
-      if (res.ok && data.lyrics) {
-        setLyrics(data.lyrics);
-      } else {
-        alert(data.error || "Não foi possível extrair legendas");
-      }
-    } catch {
-      alert("Erro ao buscar legendas do YouTube");
-    }
-    setFetching(false);
-  }
-
-  function addLine() {
-    const lastEnd = lyrics.length > 0 ? lyrics[lyrics.length - 1].endMs : 0;
-    setLyrics([...lyrics, { startMs: lastEnd, endMs: lastEnd + 4000, text: "", order: lyrics.length }]);
-  }
-
-  function removeLine(index: number) {
-    setLyrics(lyrics.filter((_, i) => i !== index));
-  }
-
-  function updateLine(index: number, field: keyof LyricLine, value: string | number) {
-    const updated = lyrics.map((line, i) => (i !== index ? line : { ...line, [field]: value }));
-    setLyrics(updated);
-  }
-
-  function importBulkText() {
-    const lines = bulkText.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
-    const newLyrics = lines.map((text, i) => ({ startMs: i * 4000, endMs: (i + 1) * 4000, text, order: i }));
-    setLyrics(newLyrics);
-    setMode("editor");
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    const res = await fetch(`/api/songs/${song.id}/lyrics`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify({
-        lyrics: lyrics.map((l, i) => ({ startMs: l.startMs, endMs: l.endMs, text: l.text, order: i })),
-      }),
-    });
-    if (res.ok) onSaved();
-    setSaving(false);
-  }
-
-  function formatMs(ms: number): string {
-    const s = Math.floor(ms / 1000);
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}:${sec.toString().padStart(2, "0")}`;
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 700 }}>
-        <h2>Letras: {song.title}</h2>
-
-        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-          {song.youtubeUrl && (
-            <button className="btn btn-secondary btn-sm" onClick={fetchFromYoutube} disabled={fetching}>
-              {fetching ? "Buscando..." : "🔍 Importar do YouTube"}
-            </button>
-          )}
-          <a
-            className="btn btn-secondary btn-sm"
-            href={`https://www.letras.mus.br/?q=${encodeURIComponent(`${song.title} ${song.artist || ""}`.trim())}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Abre a busca em letras.mus.br numa nova aba, pra você copiar e colar a letra abaixo"
-          >
-            🔍 Buscar letra
-          </a>
-          <button className="btn btn-secondary btn-sm" onClick={() => setMode(mode === "editor" ? "bulk" : "editor")}>
-            {mode === "editor" ? "📝 Colar Texto" : "✏️ Editor"}
-          </button>
-          <button className="btn btn-secondary btn-sm" onClick={addLine}>
-            + Adicionar Linha
-          </button>
-        </div>
-
-        {mode === "bulk" && (
-          <div style={{ marginBottom: 16 }}>
-            <label className="input-label">Cole a letra completa (uma frase por linha)</label>
-            <textarea
-              className="input-field"
-              value={bulkText}
-              onChange={(e) => setBulkText(e.target.value)}
-              style={{ minHeight: 200 }}
-              placeholder={"Grande é o Senhor\ne mui digno de louvor\nNa cidade do nosso Deus\n..."}
-            />
-            <button className="btn btn-primary btn-sm mt-sm" onClick={importBulkText}>
-              Importar Linhas
-            </button>
-          </div>
-        )}
-
-        {mode === "editor" && (
-          <div style={{ maxHeight: 400, overflowY: "auto", marginBottom: 16 }}>
-            {lyrics.length === 0 ? (
-              <div className="empty-state" style={{ padding: 24 }}>
-                <p>Nenhuma letra adicionada. Use os botões acima para importar ou adicionar.</p>
-              </div>
-            ) : (
-              lyrics.map((line, i) => (
-                <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", width: 24 }}>{i + 1}</span>
-                  <input
-                    className="input-field"
-                    style={{ flex: 1, padding: "8px 12px", fontSize: "0.85rem" }}
-                    value={line.text}
-                    onChange={(e) => updateLine(i, "text", e.target.value)}
-                    placeholder="Texto da linha..."
-                  />
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
-                    {formatMs(line.startMs)} → {formatMs(line.endMs)}
-                  </span>
-                  <button className="btn btn-danger btn-sm btn-icon" style={{ width: 32, height: 32, fontSize: "0.8rem" }} onClick={() => removeLine(i)}>
-                    ×
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-          <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? "Salvando..." : "Salvar Letras"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SettingsPanel({ settings, onSaved }: { settings: Settings; onSaved: (s: Settings) => void }) {
-  const [name, setName] = useState(settings.name);
-  const [primaryColor, setPrimaryColor] = useState(settings.primaryColor);
-  const [secondaryColor, setSecondaryColor] = useState(settings.secondaryColor);
-  const [bgColor, setBgColor] = useState(settings.bgColor);
-  const [textColor, setTextColor] = useState(settings.textColor);
-  const [logoUrl, setLogoUrl] = useState(settings.logoUrl || "");
-  const [saving, setSaving] = useState(false);
-
-  async function handleSave() {
-    setSaving(true);
-    const res = await fetch("/api/settings", {
-      method: "PUT",
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ name, primaryColor, secondaryColor, bgColor, textColor, logoUrl: logoUrl || null }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      onSaved(data);
-    }
-    setSaving(false);
-  }
-
-  return (
-    <>
-      <div className="topbar">
-        <h1>⚙️ Configurações</h1>
-        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-          {saving ? "Salvando..." : "Salvar"}
-        </button>
-      </div>
-
-      <div className="glass-card p-xl" style={{ maxWidth: 600 }}>
-        <h3 style={{ marginBottom: 20 }}>Identidade Visual</h3>
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div>
-            <label className="input-label">Nome da Igreja</label>
-            <input className="input-field" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-
-          <div>
-            <label className="input-label">URL do Logo</label>
-            <input className="input-field" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://..." />
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            <div>
-              <label className="input-label">Cor Primária</label>
-              <div className="color-picker-group">
-                <input type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} />
-                <input className="input-field" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} style={{ flex: 1 }} />
-              </div>
-            </div>
-            <div>
-              <label className="input-label">Cor Secundária</label>
-              <div className="color-picker-group">
-                <input type="color" value={secondaryColor} onChange={(e) => setSecondaryColor(e.target.value)} />
-                <input className="input-field" value={secondaryColor} onChange={(e) => setSecondaryColor(e.target.value)} style={{ flex: 1 }} />
-              </div>
-            </div>
-            <div>
-              <label className="input-label">Cor de Fundo (projeção)</label>
-              <div className="color-picker-group">
-                <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} />
-                <input className="input-field" value={bgColor} onChange={(e) => setBgColor(e.target.value)} style={{ flex: 1 }} />
-              </div>
-            </div>
-            <div>
-              <label className="input-label">Cor do Texto (projeção)</label>
-              <div className="color-picker-group">
-                <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} />
-                <input className="input-field" value={textColor} onChange={(e) => setTextColor(e.target.value)} style={{ flex: 1 }} />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="input-label">Preview da Projeção</label>
-            <div style={{ background: bgColor, color: textColor, padding: 24, borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", textAlign: "center" }}>
-              <p style={{ fontSize: "1.1rem", fontWeight: 700 }}>Texto de exemplo</p>
-              <p style={{ fontSize: "0.9rem", opacity: 0.7, marginTop: 8 }}>{name}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <BackupCard />
-    </>
-  );
-}
-
-function BackupCard() {
-  const [exporting, setExporting] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  async function handleExport() {
-    setExporting(true);
-    setMessage(null);
-    try {
-      const res = await fetch("/api/backup/export", { headers: getAuthHeaders() });
-      if (!res.ok) throw new Error();
-      const blob = await res.blob();
-      const disposition = res.headers.get("Content-Disposition") || "";
-      const match = /filename="?([^"]+)"?/.exec(disposition);
-      const filename = match ? match[1] : "arauto-backup.zip";
-      // Sem <a download> aqui não funciona em todo navegador — cria o link,
-      // clica sozinho e descarta, é o jeito padrão de baixar um blob gerado.
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      setMessage({ type: "success", text: `Backup baixado: ${filename}` });
-    } catch {
-      setMessage({ type: "error", text: "Erro ao gerar o backup" });
-    }
-    setExporting(false);
-  }
-
-  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // permite escolher o mesmo arquivo de novo depois
-    if (!file) return;
-
-    if (
-      !confirm(
-        "Isso vai SUBSTITUIR todas as músicas, avisos, mídias e contas atuais pelos dados do backup.\n\n" +
-          "Um backup de segurança dos dados atuais é salvo automaticamente antes, então dá pra voltar atrás. Continuar?"
-      )
-    ) {
-      return;
-    }
-
-    setImporting(true);
-    setMessage(null);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      const token = document.cookie.match(/auth-token=([^;]+)/)?.[1] || "";
-      const res = await fetch("/api/backup/import", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setMessage({ type: "success", text: `${data.message} (backup de segurança: ${data.safetyBackup})` });
-        setTimeout(() => window.location.reload(), 2500);
-      } else {
-        setMessage({ type: "error", text: data.error || "Erro ao importar o backup" });
-      }
-    } catch {
-      setMessage({ type: "error", text: "Erro ao importar o backup" });
-    }
-    setImporting(false);
-  }
-
-  return (
-    <div className="glass-card p-xl" style={{ maxWidth: 600, marginTop: 24 }}>
-      <h3 style={{ marginBottom: 6 }}>Dados e Backup</h3>
-      <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: 20 }}>
-        Todos os dados (músicas, letras, avisos, mídia, contas) ficam em arquivos locais — nenhuma nuvem envolvida.
-        Exporte de vez em quando, principalmente antes de trocar de computador.
-      </p>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <button className="btn btn-primary" onClick={handleExport} disabled={exporting}>
-          {exporting ? "Gerando..." : "⬇ Exportar Backup (.zip)"}
-        </button>
-        <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-          {importing ? "Restaurando..." : "⬆ Importar Backup (.zip)"}
-        </button>
-        <input ref={fileInputRef} type="file" accept=".zip" hidden onChange={handleImportFile} />
-      </div>
-      {message && (
-        <p style={{ fontSize: "0.85rem", marginTop: 12, color: message.type === "success" ? "var(--success)" : "var(--danger)" }}>
-          {message.text}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function ServiceModal({ onClose, onSaved }: { onClose: () => void; onSaved: (service: Service) => void }) {
-  const [title, setTitle] = useState("");
-  const [date, setDate] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    const res = await fetch("/api/services", {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ title, date: date || null }),
-    });
-    const data = await res.json();
-    if (res.ok) onSaved(data);
-    setSaving(false);
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Novo Culto</h2>
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div>
-            <label className="input-label">Nome do culto</label>
-            <input className="input-field" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Ex: Culto de Oração" />
-          </div>
-          <div>
-            <label className="input-label">Data (opcional)</label>
-            <input className="input-field" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </div>
-          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Criando..." : "Criar Culto"}</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function ServiceEditorModal({
-  service,
-  songs,
-  announcements,
-  mediaLibrary,
-  onClose,
-  onSaved,
-}: {
-  service: Service;
-  songs: Song[];
-  announcements: Announcement[];
-  mediaLibrary: MediaItem[];
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [items, setItems] = useState<ServiceItem[]>(service.items);
-  const [saving, setSaving] = useState(false);
-  const [picker, setPicker] = useState<ServiceItemType | null>(null);
-
-  function addItem(type: ServiceItemType, refId: number) {
-    setItems([...items, { id: crypto.randomUUID(), type, refId }]);
-    setPicker(null);
-  }
-  function removeItem(id: string) {
-    setItems(items.filter((i) => i.id !== id));
-  }
-  function moveItem(index: number, dir: -1 | 1) {
-    const target = index + dir;
-    if (target < 0 || target >= items.length) return;
-    const next = [...items];
-    [next[index], next[target]] = [next[target], next[index]];
-    setItems(next);
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    const res = await fetch(`/api/services/${service.id}`, {
-      method: "PUT",
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ items }),
-    });
-    if (res.ok) onSaved();
-    setSaving(false);
-  }
-
-  function labelFor(item: ServiceItem): string {
-    if (item.type === "song") {
-      const s = songs.find((x) => x.id === item.refId);
-      return s ? `🎵 ${s.title}` : "🎵 (música removida)";
-    }
-    if (item.type === "media") {
-      const m = mediaLibrary.find((x) => x.id === item.refId);
-      return m ? `🎬 ${m.title}` : "🎬 (mídia removida)";
-    }
-    const a = announcements.find((x) => x.id === item.refId);
-    return a ? `📢 ${a.title}` : "📢 (aviso removido)";
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
-        <h2>Roteiro: {service.title}</h2>
-
-        <div style={{ maxHeight: 340, overflowY: "auto", marginBottom: 16 }}>
-          {items.length === 0 ? (
-            <div className="empty-state" style={{ padding: 24 }}>
-              <p>Nenhum item ainda. Adicione músicas e avisos abaixo, na ordem que serão apresentados.</p>
-            </div>
-          ) : (
-            items.map((item, i) => (
-              <div key={item.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", width: 24 }}>{i + 1}</span>
-                <span style={{ flex: 1, fontSize: "0.9rem" }}>{labelFor(item)}</span>
-                <button className="btn btn-secondary btn-sm btn-icon" style={{ width: 32, height: 32 }} onClick={() => moveItem(i, -1)} disabled={i === 0}>↑</button>
-                <button className="btn btn-secondary btn-sm btn-icon" style={{ width: 32, height: 32 }} onClick={() => moveItem(i, 1)} disabled={i === items.length - 1}>↓</button>
-                <button className="btn btn-danger btn-sm btn-icon" style={{ width: 32, height: 32 }} onClick={() => removeItem(item.id)}>×</button>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => setPicker(picker === "song" ? null : "song")}>
-            + Adicionar Música
-          </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setPicker(picker === "announcement" ? null : "announcement")}>
-            + Adicionar Aviso
-          </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setPicker(picker === "media" ? null : "media")}>
-            + Adicionar Mídia
-          </button>
-        </div>
-
-        {picker === "media" && (
-          <div className="glass-card p-md mb-lg" style={{ maxHeight: 220, overflowY: "auto" }}>
-            {mediaLibrary.length === 0 ? (
-              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                Nenhum áudio/vídeo enviado ainda — envie um na aba Mídia.
-              </p>
-            ) : (
-              mediaLibrary.map((m) => (
-                <button key={m.id} className="sidebar-link" onClick={() => addItem("media", m.id)}>
-                  <span>
-                    {m.kind === "audio" ? "🔊" : "🎬"} {m.title}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-        )}
-
-        {picker === "song" && (
-          <div className="glass-card p-md mb-lg" style={{ maxHeight: 220, overflowY: "auto" }}>
-            {songs.length === 0 ? (
-              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Nenhuma música salva ainda — crie uma na aba Músicas.</p>
-            ) : (
-              songs.map((s) => (
-                <button key={s.id} className="sidebar-link" onClick={() => addItem("song", s.id)}>
-                  <span>🎵 {s.title}</span>
-                </button>
-              ))
-            )}
-          </div>
-        )}
-
-        {picker === "announcement" && (
-          <div className="glass-card p-md mb-lg" style={{ maxHeight: 220, overflowY: "auto" }}>
-            {announcements.length === 0 ? (
-              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Nenhum aviso salvo ainda — crie um na aba Avisos.</p>
-            ) : (
-              announcements.map((a) => (
-                <button key={a.id} className="sidebar-link" onClick={() => addItem("announcement", a.id)}>
-                  <span>📢 {a.title}</span>
-                </button>
-              ))
-            )}
-          </div>
-        )}
-
-        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-          <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? "Salvando..." : "Salvar Roteiro"}
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }

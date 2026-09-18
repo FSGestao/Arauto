@@ -453,6 +453,17 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
       })
     );
 
+    // O operador mexeu na identidade visual (cores, nome, logo). As telas já
+    // abertas carregaram essas configurações uma vez só, na abertura — sem
+    // este aviso, o projetor continuaria com as cores antigas até alguém
+    // recarregar a página, o que ninguém faz no meio do culto.
+    socket.on(
+      "admin:settingsChanged",
+      onlyAdmin(() => {
+        io.emit("settings:update");
+      })
+    );
+
     // Volta a exibir o passo atual do roteiro pausado, encerrando a
     // interjeição (ex.: depois de mostrar um aviso avulso no meio do culto).
     socket.on(

@@ -30,6 +30,7 @@ function createMainWindow() {
     minWidth: 960,
     minHeight: 640,
     title: "Arauto — Painel",
+    icon: path.join(__dirname, "..", "public", "arauto-logo.png"),
     autoHideMenuBar: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });

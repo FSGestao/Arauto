@@ -115,18 +115,24 @@ export default function ProjectionPage() {
   const [brokenKey, setBrokenKey] = useState<string | null>(null);
 
   // ─── Configurações de marca (público, sem login) ────
-  useEffect(() => {
-    fetch("/api/settings")
+  const carregarSettings = useCallback(() => {
+    fetch("/api/settings", { cache: "no-store" })
       .then((r) => r.json())
       .then(setSettings)
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    carregarSettings();
+  }, [carregarSettings]);
 
   // ─── Conexão WebSocket ────────────────────────────────
   useEffect(() => {
     const socket: Socket = io({ path: "/socket.io", query: { role: "projection" } });
     socketRef.current = socket;
     socket.on("state:update", (s: LiveState) => setState(s));
+    // Cores/nome/logo mudaram no painel: recarrega sem precisar de F5 aqui.
+    socket.on("settings:update", () => carregarSettings());
     socket.on("media:seek", (seconds: number) => {
       const el = mediaRef.current;
       if (el && Number.isFinite(seconds)) el.currentTime = seconds;
@@ -134,7 +140,7 @@ export default function ProjectionPage() {
     return () => {
       socket.disconnect();
     };
-  }, []);
+  }, [carregarSettings]);
 
   // ─── Timer para avançar a linha automaticamente ──────
   useEffect(() => {
