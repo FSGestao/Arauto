@@ -21,6 +21,7 @@ import { Icon } from "./components/Icon";
 import { EditableCurrentLine } from "./components/EditableCurrentLine";
 import { GlobalSearch } from "./components/GlobalSearch";
 import { CountdownControl } from "./components/CountdownControl";
+import { StageTimerControl } from "./components/StageTimerControl";
 import { MediaModal } from "./components/MediaModal";
 import { SongModal, LyricsEditorModal } from "./components/SongModals";
 import { AnnouncementModal, TemplateModal, UseTemplateModal } from "./components/AnnouncementModals";
@@ -61,6 +62,7 @@ export default function DashboardPage() {
     countdownTitle: null,
     countdownMediaFile: null,
     countdownMediaKind: null,
+    stageTimer: null,
     interjecting: false,
     volume: 1,
     background: null,
@@ -93,6 +95,7 @@ export default function DashboardPage() {
   const [showSearch, setShowSearch] = useState(false);
   // Popover da contagem regressiva, aberto a partir do Timer na dock.
   const [showCountdownPanel, setShowCountdownPanel] = useState(false);
+  const [timerPanelTab, setTimerPanelTab] = useState<"countdown" | "stage">("countdown");
   // Filtro de texto da biblioteca (campo no topo da coluna da esquerda).
   const [librarySearch, setLibrarySearch] = useState("");
   // Texto digitado na busca da toolbar — abre a busca global já preenchida.
@@ -225,10 +228,10 @@ export default function DashboardPage() {
   // segundo vindas do servidor.
   const [, setCountdownTick] = useState(0);
   useEffect(() => {
-    if (live.mode !== "countdown") return;
+    if (live.mode !== "countdown" && !live.stageTimer) return;
     const interval = setInterval(() => setCountdownTick((t) => t + 1), 250);
     return () => clearInterval(interval);
-  }, [live.mode]);
+  }, [live.mode, live.stageTimer]);
 
   // ─── Apply brand theme ────────────────────────────────
   useEffect(() => {
@@ -291,6 +294,14 @@ export default function DashboardPage() {
   }
   function stopCountdown() {
     socketRef.current?.emit("admin:stopCountdown");
+  }
+
+  // ─── Cronômetro de palco (só aparece em /stage) ────────
+  function startStageTimer(label: string) {
+    socketRef.current?.emit("admin:startStageTimer", label);
+  }
+  function stopStageTimer() {
+    socketRef.current?.emit("admin:stopStageTimer");
   }
 
   // Corrige a linha que está no ar AGORA, sem sair da apresentação: atualiza
@@ -548,6 +559,8 @@ export default function DashboardPage() {
   const dockTimer =
     live.mode === "countdown" && live.countdownEndsAt
       ? formatCountdown(live.countdownEndsAt - Date.now())
+      : live.stageTimer
+      ? formatCountdown(Date.now() - live.stageTimer.startedAt)
       : live.mode === "media"
       ? formatTime(mediaProgress.currentTime)
       : "00:00";
@@ -1396,9 +1409,12 @@ export default function DashboardPage() {
             <div className="dock-timer">
               <span>Timer</span>
               <button
-                className={`dock-timer-value ${live.mode === "countdown" ? "running" : ""}`}
-                onClick={() => setShowCountdownPanel((v) => !v)}
-                title="Contagem regressiva"
+                className={`dock-timer-value ${live.mode === "countdown" || live.stageTimer ? "running" : ""}`}
+                onClick={() => {
+                  if (live.stageTimer && live.mode !== "countdown") setTimerPanelTab("stage");
+                  setShowCountdownPanel((v) => !v);
+                }}
+                title="Contagem regressiva / Timer de palco"
               >
                 {dockTimer}
               </button>
@@ -1406,17 +1422,44 @@ export default function DashboardPage() {
           </div>
         </footer>
 
-        {/* Contagem regressiva, aberta pelo Timer da dock */}
+        {/* Contagem regressiva / cronômetro de palco, abertos pelo Timer da dock */}
         {showCountdownPanel && (
           <div style={{ position: "absolute", bottom: 150, right: 24, width: 380, zIndex: 150 }}>
-            <CountdownControl
-              active={live.mode === "countdown"}
-              endsAt={live.countdownEndsAt}
-              title={live.countdownTitle}
-              mediaLibrary={mediaLibrary}
-              onStart={startCountdown}
-              onStop={stopCountdown}
-            />
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <button
+                className={`btn btn-sm ${timerPanelTab === "countdown" ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => setTimerPanelTab("countdown")}
+                style={{ flex: 1 }}
+              >
+                Contagem regressiva
+              </button>
+              <button
+                className={`btn btn-sm ${timerPanelTab === "stage" ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => setTimerPanelTab("stage")}
+                style={{ flex: 1 }}
+                title="Cronômetro visível só na tela de Stage View"
+              >
+                Timer de palco
+              </button>
+            </div>
+            {timerPanelTab === "countdown" ? (
+              <CountdownControl
+                active={live.mode === "countdown"}
+                endsAt={live.countdownEndsAt}
+                title={live.countdownTitle}
+                mediaLibrary={mediaLibrary}
+                onStart={startCountdown}
+                onStop={stopCountdown}
+              />
+            ) : (
+              <StageTimerControl
+                active={!!live.stageTimer}
+                startedAt={live.stageTimer?.startedAt ?? null}
+                label={live.stageTimer?.label ?? null}
+                onStart={startStageTimer}
+                onStop={stopStageTimer}
+              />
+            )}
           </div>
         )}
       </div>

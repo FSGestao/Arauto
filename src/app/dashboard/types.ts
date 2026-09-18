@@ -5,6 +5,8 @@
    agregados como `_count`.
    ═══════════════════════════════════════════════════════ */
 
+export type TextPosition = "top" | "center" | "bottom";
+
 export interface Settings {
   name: string;
   primaryColor: string;
@@ -12,6 +14,8 @@ export interface Settings {
   bgColor: string;
   textColor: string;
   logoUrl: string | null;
+  textPosition: TextPosition;
+  countdownTextPosition: TextPosition;
 }
 
 export interface UserInfo {
@@ -94,6 +98,10 @@ export interface LiveState {
   countdownTitle: string | null;
   countdownMediaFile: string | null;
   countdownMediaKind: "image" | "video" | null;
+  /** Cronômetro (contagem crescente) que só aparece na tela de Stage View —
+   *  não interfere no que está sendo projetado publicamente. Serve pra medir
+   *  a duração do louvor ou da pregação sem tirar a letra/aviso da tela. */
+  stageTimer: { startedAt: number; label: string } | null;
   service: ServiceProgress | null;
   interjecting: boolean;
   volume: number;

@@ -32,6 +32,8 @@ export async function PUT(req: NextRequest) {
       doc.bgColor = body.bgColor ?? doc.bgColor;
       doc.textColor = body.textColor ?? doc.textColor;
       doc.logoUrl = body.logoUrl ?? doc.logoUrl;
+      doc.textPosition = body.textPosition ?? doc.textPosition;
+      doc.countdownTextPosition = body.countdownTextPosition ?? doc.countdownTextPosition;
       return doc;
     }
   );

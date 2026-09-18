@@ -507,6 +507,32 @@ textarea.input-field {
   resize: vertical;
 }
 
+/* Input de arquivo: o botão nativo do navegador ("Escolher arquivo") ignora
+   nosso tema e vem grande/cinza. Estiliza o botão embutido via
+   ::file-selector-button pra combinar com o resto dos campos. */
+.input-field[type="file"] {
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.input-field[type="file"]::file-selector-button {
+  padding: 8px 14px;
+  margin-right: 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.input-field[type="file"]::file-selector-button:hover {
+  background: var(--primary-light);
+}
+
 /* ─── Layout Helpers ─────────────────────────────────── */
 .container {
   width: 100%;
@@ -909,6 +935,11 @@ textarea.input-field {
      entrega isso, mas o hover ajuda). */
   background: rgba(239, 68, 68, 0.15);
   color: var(--danger);
+}
+.library-item-menu svg {
+  /* Sem isso o SVG fica sem tamanho definido e estoura o botão de 26px. */
+  width: 15px;
+  height: 15px;
 }
 
 /* Botões de ação dos cards: "Projetar" cheio, o resto contornado. */

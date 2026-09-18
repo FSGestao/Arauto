@@ -94,6 +94,9 @@ export interface Service {
   updatedAt: string;
 }
 
+/** Posição vertical do texto na tela de projeção. */
+export type TextPosition = "top" | "center" | "bottom";
+
 export interface Settings {
   name: string;
   primaryColor: string;
@@ -101,6 +104,10 @@ export interface Settings {
   bgColor: string;
   textColor: string;
   logoUrl: string | null;
+  /** Letras de música e avisos (texto puro) — configurados juntos. */
+  textPosition: TextPosition;
+  /** Separado do acima: só a contagem regressiva. */
+  countdownTextPosition: TextPosition;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -110,4 +117,6 @@ export const DEFAULT_SETTINGS: Settings = {
   bgColor: "#0F0A1E",
   textColor: "#FFFFFF",
   logoUrl: null,
+  textPosition: "center",
+  countdownTextPosition: "center",
 };

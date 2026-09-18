@@ -44,6 +44,9 @@ interface LiveState {
   countdownEndsAt: number | null;
   countdownTitle: string | null;
   service: ServiceProgress | null;
+  /** Cronômetro crescente que só a Stage View mostra — independente de
+   *  `mode`, continua rodando mesmo se a letra/aviso em cima trocar. */
+  stageTimer: { startedAt: number; label: string } | null;
 }
 
 const EMPTY_STATE: LiveState = {
@@ -57,6 +60,7 @@ const EMPTY_STATE: LiveState = {
   countdownEndsAt: null,
   countdownTitle: null,
   service: null,
+  stageTimer: null,
 };
 
 /** Formata milissegundos restantes como mm:ss ou h:mm:ss. */
@@ -107,10 +111,10 @@ export default function StagePage() {
   }, [state.isPlaying, state.mode]);
 
   useEffect(() => {
-    if (state.mode !== "countdown") return;
+    if (state.mode !== "countdown" && !state.stageTimer) return;
     const interval = setInterval(() => setTick((t) => t + 1), 250);
     return () => clearInterval(interval);
-  }, [state.mode]);
+  }, [state.mode, state.stageTimer]);
 
   let currentLine: LyricLine | null = null;
   let nextLine: LyricLine | null = null;
@@ -179,6 +183,29 @@ export default function StagePage() {
         )}
         {state.mode === "idle" && <p style={{ fontSize: "1.4rem", opacity: 0.3 }}>Aguardando...</p>}
       </div>
+
+      {/* Cronômetro de palco — fixo num canto, independente do que está em
+          `mode` acima (letra/aviso continuam visíveis normalmente). */}
+      {state.stageTimer && (
+        <div
+          style={{
+            position: "fixed",
+            top: "3vh",
+            left: "3vw",
+            display: "flex",
+            alignItems: "baseline",
+            gap: "1.2vw",
+            opacity: 0.85,
+          }}
+        >
+          <p style={{ fontSize: "clamp(1.4rem, 3.2vw, 2.6rem)", fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+            {formatCountdown(Date.now() - state.stageTimer.startedAt)}
+          </p>
+          {state.stageTimer.label && (
+            <p style={{ fontSize: "clamp(0.85rem, 1.6vw, 1.2rem)", opacity: 0.6 }}>{state.stageTimer.label}</p>
+          )}
+        </div>
+      )}
 
       {/* Próxima linha (dentro da mesma música) ou próximo evento do roteiro. */}
       {(nextLine || nextEventLabel) && (

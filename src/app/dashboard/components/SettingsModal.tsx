@@ -59,6 +59,8 @@ export function SettingsModal({
   const [bgColor, setBgColor] = useState(settings.bgColor);
   const [textColor, setTextColor] = useState(settings.textColor);
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || "");
+  const [textPosition, setTextPosition] = useState(settings.textPosition || "center");
+  const [countdownTextPosition, setCountdownTextPosition] = useState(settings.countdownTextPosition || "center");
   const [saving, setSaving] = useState(false);
 
   // Espelha DEFAULT_SETTINGS de src/lib/types.ts — não importamos de lá de
@@ -75,7 +77,16 @@ export function SettingsModal({
     const res = await fetch("/api/settings", {
       method: "PUT",
       headers: getAuthHeaders(),
-      body: JSON.stringify({ name, primaryColor, secondaryColor, bgColor, textColor, logoUrl: logoUrl || null }),
+      body: JSON.stringify({
+        name,
+        primaryColor,
+        secondaryColor,
+        bgColor,
+        textColor,
+        logoUrl: logoUrl || null,
+        textPosition,
+        countdownTextPosition,
+      }),
     });
     if (res.ok) {
       const data = await res.json();
@@ -169,6 +180,33 @@ export function SettingsModal({
                 <div style={{ background: bgColor, color: textColor, padding: 24, borderRadius: "var(--radius-lg)", border: "1px solid var(--border-glass)", textAlign: "center" }}>
                   <p style={{ fontSize: "1.1rem", fontWeight: 700 }}>Texto de exemplo</p>
                   <p style={{ fontSize: "0.9rem", opacity: 0.7, marginTop: 8 }}>{name}</p>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div>
+                  <label className="input-label">Posição do texto (letras e avisos)</label>
+                  <select
+                    className="input-field"
+                    value={textPosition}
+                    onChange={(e) => setTextPosition(e.target.value as typeof textPosition)}
+                  >
+                    <option value="top">Acima</option>
+                    <option value="center">Centralizado</option>
+                    <option value="bottom">Abaixo</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">Posição do texto (contagem regressiva)</label>
+                  <select
+                    className="input-field"
+                    value={countdownTextPosition}
+                    onChange={(e) => setCountdownTextPosition(e.target.value as typeof countdownTextPosition)}
+                  >
+                    <option value="top">Acima</option>
+                    <option value="center">Centralizado</option>
+                    <option value="bottom">Abaixo</option>
+                  </select>
                 </div>
               </div>
 

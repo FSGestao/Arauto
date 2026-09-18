@@ -158,9 +158,14 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
   let volume = 1; // 0..1 — volume de áudio/vídeo na tela de projeção
   let background = null; // arquivo de vídeo tocando ATRÁS da letra/aviso
   let mediaPaused = false; // pausa manual do item de mídia no ar
+  // Cronômetro (contagem crescente) só pra tela de Stage View — igual aos
+  // acima, fica fora do liveState de propósito: ligar/desligar não deve
+  // depender de nem interferir no que está sendo projetado publicamente
+  // (o operador pode trocar de música/aviso com o cronômetro correndo).
+  let stageTimer = null; // { startedAt, label } | null
 
   function broadcast() {
-    io.emit("state:update", { ...liveState, volume, background, mediaPaused });
+    io.emit("state:update", { ...liveState, volume, background, mediaPaused, stageTimer });
   }
 
   // Quantas telas de cada tipo estão conectadas agora — pra quem está
@@ -238,7 +243,7 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
     // Sempre que alguém conecta (admin ou projeção), envia o estado atual —
     // inclusive numa reconexão depois de queda de rede, que é o caso em que
     // a tela não pode ficar congelada mostrando o passo antigo.
-    socket.emit("state:update", { ...liveState, volume, background, mediaPaused });
+    socket.emit("state:update", { ...liveState, volume, background, mediaPaused, stageTimer });
     socket.emit("connections:update", connections);
 
     const token = socket.handshake.auth && socket.handshake.auth.token;
@@ -412,6 +417,24 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
       "admin:setBackground",
       onlyAdmin((file) => {
         background = typeof file === "string" && file ? file : null;
+        broadcast();
+      })
+    );
+
+    // Cronômetro de palco: só a tela de Stage View mostra (ver stage/page.tsx)
+    // — não muda `mode` nem passa por emptyState(), então liga/desliga sem
+    // afetar o que está no telão público.
+    socket.on(
+      "admin:startStageTimer",
+      onlyAdmin((label) => {
+        stageTimer = { startedAt: Date.now(), label: typeof label === "string" ? label : "" };
+        broadcast();
+      })
+    );
+    socket.on(
+      "admin:stopStageTimer",
+      onlyAdmin(() => {
+        stageTimer = null;
         broadcast();
       })
     );

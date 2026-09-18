@@ -77,6 +77,8 @@ function loadYouTubeApi(): Promise<void> {
   return ytApiPromise;
 }
 
+type TextPosition = "top" | "center" | "bottom";
+
 interface Settings {
   name: string;
   primaryColor: string;
@@ -84,6 +86,16 @@ interface Settings {
   bgColor: string;
   textColor: string;
   logoUrl: string | null;
+  textPosition: TextPosition;
+  countdownTextPosition: TextPosition;
+}
+
+/** Converte a posição escolhida no painel no `align-items` do wrapper flex
+ *  (o layout é `flex-direction: row`, então o eixo vertical é o cruzado). */
+function alignFor(pos: TextPosition | undefined): string {
+  if (pos === "top") return "flex-start";
+  if (pos === "bottom") return "flex-end";
+  return "center";
 }
 
 interface ServiceProgress {
@@ -489,8 +501,12 @@ export default function ProjectionPage() {
           width: "100%",
           height: "100%",
           display: "flex",
-          alignItems: "center",
+          // Mídia em tela cheia (vídeo/imagem/YouTube) é posicionada absoluta
+          // e ignora isso; só texto (letra, aviso, título da contagem) sobe/
+          // desce — cada um com a posição configurada em Configurações.
+          alignItems: alignFor(state.mode === "countdown" ? settings?.countdownTextPosition : settings?.textPosition),
           justifyContent: "center",
+          padding: "6vh 0",
         }}
       >
         {state.mode === "idle" && !state.background && brandBlock}
