@@ -30,6 +30,7 @@ const ICON_PATHS: Record<string, React.ReactNode> = {
   checklist: <><path d="m3 6 2 2 3-3" /><path d="m3 14 2 2 3-3" /><path d="M12 7h9" /><path d="M12 15h9" /></>,
   book: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /></>,
   upload: <><path d="M12 3v12" /><path d="m7 8 5-5 5 5" /><path d="M5 21h14" /></>,
+  mail: <><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m2 7 10 6 10-6" /></>,
 };
 
 export function Icon({ name, size }: { name: keyof typeof ICON_PATHS | string; size?: number }) {

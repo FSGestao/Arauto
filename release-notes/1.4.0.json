@@ -1,0 +1,13 @@
+{
+  "version": "1.4.0",
+  "date": "2026-09-19",
+  "title": "Fale conosco e mais robustez contra falhas",
+  "status": "approved",
+  "items": [
+    "Novo: \"Fale conosco\" (Configurações > Sobre) — envie dúvida, sugestão ou problema direto para quem cuida do Arauto, sem sair do sistema.",
+    "Corrigido: um arquivo de dados corrompido (ex.: por queda de energia) fazia o sistema voltar vazio em silêncio — agora guarda uma cópia do arquivo original e avisa no log, sem apagar nada sem querer.",
+    "Corrigido: um erro de tela deixava a Projeção ou o painel em branco sem recuperação — agora o Arauto tenta se recuperar sozinho e, se não conseguir, recarrega automaticamente.",
+    "Corrigido: se o Arauto não conseguisse iniciar (ex.: outra janela travada usando a mesma porta), o aplicativo não abria e não mostrava nenhum aviso — agora explica o que houve e como resolver.",
+    "Ajuste: os botões Anterior/Próximo mostram o atalho de teclado correspondente ao passar o mouse."
+  ]
+}

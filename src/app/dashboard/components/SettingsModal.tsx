@@ -290,6 +290,7 @@ export function SettingsModal({
                 </button>
               </div>
               <UpdateCard />
+              <ContactCard />
             </div>
           )}
         </div>
@@ -474,6 +475,89 @@ function UpdateCard() {
           )}
           {status.state === "error" && (
             <p style={{ fontSize: "0.8rem", color: "var(--danger)", marginTop: 8 }}>{status.message}</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// Mesmo endpoint usado na landing page (landing/index.html) — trocar
+// "SEU_FORM_ID" pelo endpoint real do Formspree (https://formspree.io) nos
+// dois lugares assim que a conta for criada. Até lá, o formulário aparece
+// normalmente mas o envio falha (ver mensagem de erro abaixo).
+const FORMSPREE_ENDPOINT = "https://formspree.io/f/SEU_FORM_ID";
+
+/**
+ * "Fale conosco" — pra dúvida, sugestão ou algo que quebrou chegar direto
+ * pra quem cuida do sistema, sem precisar administrar grupo nenhum. Envia
+ * via fetch (Accept: application/json) em vez de um <form> normal, pra dar
+ * feedback dentro do próprio modal em vez de navegar pra outra página.
+ */
+function ContactCard() {
+  const [message, setMessage] = useState("");
+  const [email, setEmail] = useState("");
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<"ok" | "error" | null>(null);
+
+  async function handleSend() {
+    if (!message.trim()) return;
+    setSending(true);
+    setResult(null);
+    try {
+      const res = await fetch(FORMSPREE_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ message, _replyto: email || undefined, origem: "painel do Arauto" }),
+      });
+      if (res.ok) {
+        setResult("ok");
+        setMessage("");
+        setEmail("");
+      } else {
+        setResult("error");
+      }
+    } catch {
+      setResult("error");
+    }
+    setSending(false);
+  }
+
+  return (
+    <div className="glass-card p-md" style={{ marginTop: 16 }}>
+      <p style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
+        <Icon name="mail" size={14} /> Fale conosco
+      </p>
+      <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 10 }}>
+        Dúvida, sugestão ou algo não funcionou? Mande uma mensagem direto pra quem cuida do Arauto.
+      </p>
+      {result === "ok" ? (
+        <p style={{ fontSize: "0.85rem", color: "var(--success)" }}>Mensagem enviada. Obrigado!</p>
+      ) : (
+        <>
+          <textarea
+            className="input-field"
+            rows={3}
+            placeholder="O que você quer contar?"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            style={{ marginBottom: 8 }}
+          />
+          <input
+            className="input-field"
+            type="email"
+            placeholder="Seu e-mail (opcional, pra podermos responder)"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={{ marginBottom: 8 }}
+          />
+          <button className="btn btn-primary btn-sm" onClick={handleSend} disabled={sending || !message.trim()}>
+            {sending ? "Enviando..." : "Enviar mensagem"}
+          </button>
+          {result === "error" && (
+            <p style={{ fontSize: "0.8rem", color: "var(--danger)", marginTop: 8 }}>
+              Não foi possível enviar agora. Tente de novo mais tarde.
+            </p>
           )}
         </>
       )}

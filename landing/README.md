@@ -11,13 +11,17 @@ gratuito, sem escrever código) pra levar a mensagem direto pro seu e-mail:
 1. Crie uma conta gratuita em https://formspree.io.
 2. Clique em "New Form", dê um nome (ex.: "Arauto — Contato") e confirme.
 3. O Formspree mostra um endpoint parecido com `https://formspree.io/f/xxxxxxxx`.
-4. Abra `landing/index.html`, procure por `SEU_FORM_ID` (dentro da tag
-   `<form action="...">`) e troque pelo endpoint completo.
-5. Publique — a partir da primeira mensagem enviada pelo site, o Formspree
-   pede uma confirmação única por e-mail (é assim que ele evita spam).
+4. Troque `SEU_FORM_ID` pelo endpoint completo em **dois lugares**:
+   - `landing/index.html` (dentro da tag `<form action="...">`)
+   - `src/app/dashboard/components/SettingsModal.tsx` (constante
+     `FORMSPREE_ENDPOINT`, perto do fim do arquivo) — é o que alimenta o
+     "Fale conosco" de dentro do próprio painel do Arauto.
+5. Publique — a partir da primeira mensagem enviada (pelo site ou pelo
+   painel), o Formspree pede uma confirmação única por e-mail (é assim que
+   ele evita spam).
 
-Sem esse passo, o formulário aparece normalmente mas as mensagens não vão a
-lugar nenhum.
+Sem esse passo, os dois formulários aparecem normalmente mas as mensagens
+não vão a lugar nenhum.
 
 ## Publicar no Vercel
 
