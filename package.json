@@ -70,7 +70,8 @@
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": false
+      "allowToChangeInstallationDirectory": false,
+      "artifactName": "Arauto-Setup.${ext}"
     },
     "directories": {
       "output": "release"

@@ -1,10 +1,16 @@
 const path = require("path");
-const { app, BrowserWindow, screen, Menu, shell, ipcMain } = require("electron");
+const { app, BrowserWindow, screen, Menu, shell, ipcMain, dialog } = require("electron");
 const { autoUpdater } = require("electron-updater");
 
 let mainWindow = null;
 let projectionWindow = null;
 let baseUrl = null;
+
+// Mesma lógica do server.js: um erro escapando sem tratamento no processo
+// principal do Electron mataria o app inteiro sem aviso nenhum — durante um
+// culto, isso significa a projeção sumir do nada. Loga e segue.
+process.on("uncaughtException", (e) => console.error("[Arauto] Erro não tratado no processo principal:", e));
+process.on("unhandledRejection", (e) => console.error("[Arauto] Promessa rejeitada sem tratamento:", e));
 
 // Sem isso, o electron-updater verificaria a cada execução mesmo em
 // desenvolvimento (sem instalador, sem feed de update) e só geraria erro.
@@ -141,8 +147,27 @@ function buildMenu() {
 }
 
 app.whenReady().then(async () => {
-  const info = await startLocalServer();
-  baseUrl = info.urls.local;
+  try {
+    const info = await startLocalServer();
+    baseUrl = info.urls.local;
+  } catch (e) {
+    // Sem isto, uma falha aqui (porta 3210 já em uso por uma instância
+    // travada, pasta de dados sem permissão de escrita etc.) fazia o app
+    // simplesmente não abrir NADA — nenhuma janela, nenhum aviso. Pra quem
+    // não é técnico, isso parece "o sistema não funciona", sem pista
+    // nenhuma do que fazer. Uma caixa de diálogo nativa, mesmo genérica,
+    // já é infinitamente melhor que silêncio.
+    const message = String(e && e.message ? e.message : e);
+    const isPortBusy = /EADDRINUSE/.test(message);
+    dialog.showErrorBox(
+      "Não foi possível iniciar o Arauto",
+      isPortBusy
+        ? "A porta usada pelo Arauto já está em uso — provavelmente outra janela do Arauto já está aberta (talvez travada, sem aparecer na tela).\n\nFeche o Arauto pelo Gerenciador de Tarefas (procure por \"Arauto\" ou \"node\") e abra de novo. Se persistir, reinicie o computador."
+        : `Detalhe técnico: ${message}\n\nSe o problema persistir, contate quem administra o sistema.`
+    );
+    app.quit();
+    return;
+  }
 
   createMainWindow();
   buildMenu();

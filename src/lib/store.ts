@@ -32,7 +32,19 @@ async function readJson<T>(name: string, fallback: T): Promise<T> {
   try {
     const raw = await fs.promises.readFile(fp, "utf-8");
     return JSON.parse(raw) as T;
-  } catch {
+  } catch (e) {
+    // Arquivo corrompido (ex.: queda de energia no meio de uma escrita antiga,
+    // antes do padrão atômico tmp+rename abaixo existir) — NÃO pode voltar
+    // fallback em silêncio: a próxima escrita gravaria por cima e destruiria
+    // de vez o que ainda pudesse estar recuperável ali dentro. Guarda uma
+    // cópia do arquivo quebrado ao lado, loga bem alto, e só então segue com
+    // a coleção vazia — dá pra perceber e tentar recuperar manualmente.
+    console.error(`[store] "${name}.json" está corrompido/ilegível — mantendo cópia e usando dados vazios.`, e);
+    try {
+      await fs.promises.copyFile(fp, `${fp}.corrompido-${Date.now()}`);
+    } catch (copyErr) {
+      console.error(`[store] Não deu pra salvar cópia de "${name}.json" corrompido:`, copyErr);
+    }
     return fallback;
   }
 }

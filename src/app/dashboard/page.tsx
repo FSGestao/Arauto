@@ -1886,11 +1886,13 @@ export default function DashboardPage() {
                 className="dock-btn"
                 onClick={live.service ? roteiroPrev : prevLine}
                 disabled={!live.service && live.mode !== "lyrics"}
+                title="Atalho: seta esquerda"
               >
                 <Icon name="chevronLeft" /> Anterior
               </button>
               <button
                 className="dock-btn"
+                title="Atalho: seta direita ou espaço"
                 onClick={live.service ? roteiroNext : nextLine}
                 disabled={!live.service && live.mode !== "lyrics"}
               >
