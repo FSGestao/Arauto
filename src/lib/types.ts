@@ -76,13 +76,17 @@ export interface MediaItem {
   updatedAt: string;
 }
 
-export type ServiceItemType = "song" | "announcement" | "media";
+export type ServiceItemType = "song" | "announcement" | "media" | "bible";
 
 export interface ServiceItem {
   id: string; // uuid — identidade estável do item dentro do roteiro (independente do refId)
   type: ServiceItemType;
-  refId: number; // id da Song, Announcement ou MediaItem referenciada
+  refId: number; // id da Song, Announcement ou MediaItem referenciada — 0 quando type === "bible"
   skip?: boolean; // desmarcado no roteiro: fica salvo no culto, mas não entra na apresentação
+  /** Só quando type === "bible": o versículo não tem um id numérico numa
+   *  coleção pra referenciar por `refId` (não é salvo em lugar nenhum além
+   *  do próprio roteiro) — por isso vem embutido, já resolvido, aqui. */
+  bible?: BibleReference;
 }
 
 export interface Service {
@@ -92,6 +96,64 @@ export interface Service {
   items: ServiceItem[];
   createdAt: string;
   updatedAt: string;
+}
+
+/* ─── Bíblia ─────────────────────────────────────────────
+   Cada tradução é um arquivo próprio em data/bible/<id>.json (pesado —
+   pode passar de 30 mil versículos — por isso fora do padrão de coleção
+   genérica). `bible-translations.json` guarda só os metadados de cada
+   uma (pra listar sem carregar o texto inteiro). */
+export interface BibleVerse {
+  number: number;
+  text: string;
+}
+
+export interface BibleChapter {
+  number: number;
+  verses: BibleVerse[];
+}
+
+export interface BibleBook {
+  name: string;
+  abbrev: string;
+  chapters: BibleChapter[];
+}
+
+export interface BibleTranslationData {
+  id: string;
+  name: string;
+  language: string;
+  license: string;
+  source: string;
+  books: BibleBook[];
+}
+
+/** O que vai pro liveState/projeção quando um versículo é colocado no ar —
+ *  autocontido (texto já embutido), pra projeção não precisar buscar a
+ *  tradução inteira só pra mostrar uma referência. */
+export interface BibleReference {
+  translationId: string;
+  translationName: string;
+  book: string;
+  bookAbbrev: string;
+  chapter: number;
+  verse: number;
+  text: string;
+}
+
+export interface BibleTranslationMeta {
+  id: string;
+  name: string;
+  language: string;
+  license: string;
+  source: string;
+  /** "seed": veio junto com o Arauto (domínio público). "upload": o
+   *  próprio usuário enviou um arquivo (responsabilidade dele ter os
+   *  direitos de uso — o app não valida licença de upload). */
+  origin: "seed" | "upload";
+  bookCount: number;
+  verseCount: number;
+  createdAt: string;
 }
 
 /** Posição vertical do texto na tela de projeção. */
@@ -108,6 +170,12 @@ export interface Settings {
   textPosition: TextPosition;
   /** Separado do acima: só a contagem regressiva. */
   countdownTextPosition: TextPosition;
+  /** Última versão do app que essa instalação já viu — decide se mostra o
+   *  "Como usar" (nunca visto nenhuma versão ainda) ou as notas da versão
+   *  (viu uma versão diferente da atual) ao abrir o painel. `undefined`
+   *  significa "primeira vez", de propósito — não dá pra confundir com uma
+   *  string vazia por engano. */
+  lastSeenVersion?: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {

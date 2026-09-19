@@ -38,6 +38,16 @@ interface MediaItem {
   source?: "upload" | "youtube";
 }
 
+interface BibleReference {
+  translationId: string;
+  translationName: string;
+  book: string;
+  bookAbbrev: string;
+  chapter: number;
+  verse: number;
+  text: string;
+}
+
 declare global {
   interface Window {
     YT?: {
@@ -106,18 +116,20 @@ interface ServiceProgress {
 }
 
 interface LiveState {
-  mode: "idle" | "lyrics" | "announcement" | "media" | "countdown";
+  mode: "idle" | "lyrics" | "announcement" | "media" | "countdown" | "bible";
   song: Song | null;
   lyricIndex: number;
   isPlaying: boolean;
   startedAt: number | null;
   announcement: Announcement | null;
   media: MediaItem | null;
+  bible: BibleReference | null;
   nextMedia: string | null;
   countdownEndsAt: number | null;
   countdownTitle: string | null;
   countdownMediaFile: string | null;
   countdownMediaKind: "image" | "video" | null;
+  countdownMediaSource: "upload" | "youtube" | null;
   service: ServiceProgress | null;
   volume: number;
   background: string | null;
@@ -132,11 +144,13 @@ const EMPTY_STATE: LiveState = {
   startedAt: null,
   announcement: null,
   media: null,
+  bible: null,
   nextMedia: null,
   countdownEndsAt: null,
   countdownTitle: null,
   countdownMediaFile: null,
   countdownMediaKind: null,
+  countdownMediaSource: null,
   service: null,
   volume: 1,
   background: null,
@@ -513,8 +527,18 @@ export default function ProjectionPage() {
 
         {state.mode === "countdown" && state.countdownEndsAt && state.countdownMediaFile && (
           /* Cartaz/vídeo do evento atrás do relógio — mesma ideia do vídeo de
-             fundo, mas específico da contagem (não fica quando ela termina). */
-          brokenKey === `countdown-${state.countdownMediaFile}` ? null : state.countdownMediaKind === "video" ? (
+             fundo, mas específico da contagem (não fica quando ela termina).
+             Vídeo do YouTube não tem um arquivo local pra usar em <video>,
+             então entra como <iframe> mudo/em loop, só decorativo (sem
+             controles — os controles de play/pausa são só pro modo Mídia). */
+          brokenKey === `countdown-${state.countdownMediaFile}` ? null : state.countdownMediaKind === "video" && state.countdownMediaSource === "youtube" ? (
+            <iframe
+              key={`countdown-${state.countdownMediaFile}`}
+              src={`https://www.youtube.com/embed/${state.countdownMediaFile}?autoplay=1&mute=1&controls=0&loop=1&playlist=${state.countdownMediaFile}&modestbranding=1&rel=0&disablekb=1&iv_load_policy=3`}
+              allow="autoplay; encrypted-media"
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0, objectFit: "cover", zIndex: 0, pointerEvents: "none" }}
+            />
+          ) : state.countdownMediaKind === "video" ? (
             <video
               key={`countdown-${state.countdownMediaFile}`}
               src={`/api/media/${state.countdownMediaFile}`}
@@ -704,6 +728,32 @@ export default function ProjectionPage() {
             </div>
           </div>
         )}
+
+        {state.mode === "bible" && state.bible && (
+          <div key={`${state.bible.bookAbbrev}-${state.bible.chapter}-${state.bible.verse}`} style={{ textAlign: "center", padding: "5vh 8vw", maxWidth: "80vw", animation: "lyricFade 0.5s ease" }}>
+            <p
+              style={{
+                fontSize: "clamp(1.3rem, 4vw, 3.6rem)",
+                lineHeight: 1.4,
+                fontWeight: 600,
+                textShadow,
+              }}
+            >
+              {state.bible.text}
+            </p>
+            <p
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: "clamp(0.9rem, 2vw, 1.6rem)",
+                opacity: 0.75,
+                marginTop: "3vh",
+                textShadow,
+              }}
+            >
+              {state.bible.book} {state.bible.chapter}:{state.bible.verse}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Pré-carrega a mídia do próximo passo, pra troca não engasgar. */}
@@ -715,22 +765,6 @@ export default function ProjectionPage() {
           muted
           style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
         />
-      )}
-
-      {state.service && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: "2vh",
-            right: "2vw",
-            fontSize: "0.75rem",
-            opacity: 0.35,
-            fontFamily: "var(--font-body)",
-            zIndex: 2,
-          }}
-        >
-          {state.service.stepIndex + 1} / {state.service.totalSteps}
-        </div>
       )}
 
       {state.mode !== "idle" && settings?.logoUrl && (

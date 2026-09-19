@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatCountdown } from "../utils";
 import type { MediaItem } from "../types";
+import { Icon } from "./Icon";
 
 /**
  * Contagem regressiva — funciona independente de ter um culto em apresentação
@@ -18,22 +19,45 @@ export function CountdownControl({
   mediaLibrary,
   onStart,
   onStop,
+  onUploadNew,
 }: {
   active: boolean;
   endsAt: number | null;
   title: string | null;
   mediaLibrary: MediaItem[];
-  onStart: (seconds: number, title: string, mediaFile: string | null, mediaKind: "image" | "video" | null) => void;
+  onStart: (
+    seconds: number,
+    title: string,
+    mediaFile: string | null,
+    mediaKind: "image" | "video" | null,
+    mediaSource: "upload" | "youtube" | null
+  ) => void;
   onStop: () => void;
+  /** Abre o envio de mídia sem precisar trocar pro filtro Mídia primeiro —
+   *  o item enviado aparece automaticamente selecionado abaixo. */
+  onUploadNew: () => void;
 }) {
   const [minutes, setMinutes] = useState(5);
   const [label, setLabel] = useState("O culto começa em breve");
   const [mediaId, setMediaId] = useState<number | "">("");
 
-  // Só imagem e vídeo enviados têm sentido como cartaz atrás do relógio —
-  // áudio não aparece na tela, e vídeo do YouTube não dá pra sobrepor
-  // (mesma limitação do "Usar como fundo").
-  const opcoesDeMidia = mediaLibrary.filter((m) => (m.kind === "image" || m.kind === "video") && m.source !== "youtube");
+  // Imagem e vídeo (enviado ou do YouTube) servem como cartaz atrás do
+  // relógio — áudio não aparece na tela.
+  const opcoesDeMidia = mediaLibrary.filter((m) => m.kind === "image" || m.kind === "video");
+
+  // Depois de enviar pelo botão "+ Enviar novo" abaixo, seleciona o item
+  // que acabou de entrar na lista — sem isso, o operador escolheria de
+  // novo manualmente algo que ele já tinha acabado de escolher enviar.
+  // Compara por ID (não por tamanho/posição): a API devolve a mídia mais
+  // nova PRIMEIRO, então pegar "o último da lista" pegava o mais antigo.
+  const knownIdsRef = useRef(new Set(opcoesDeMidia.map((m) => m.id)));
+  useEffect(() => {
+    if (mediaId === "") {
+      const novo = opcoesDeMidia.find((m) => !knownIdsRef.current.has(m.id));
+      if (novo) setMediaId(novo.id);
+    }
+    knownIdsRef.current = new Set(opcoesDeMidia.map((m) => m.id));
+  }, [opcoesDeMidia, mediaId]);
 
   if (active && endsAt) {
     const remaining = formatCountdown(endsAt - Date.now());
@@ -86,14 +110,30 @@ export function CountdownControl({
           className="btn btn-primary btn-sm"
           onClick={() => {
             const escolhido = mediaId === "" ? null : opcoesDeMidia.find((m) => m.id === mediaId) || null;
-            onStart(minutes * 60, label, escolhido?.file ?? null, escolhido?.kind === "image" || escolhido?.kind === "video" ? escolhido.kind : null);
+            onStart(
+              minutes * 60,
+              label,
+              escolhido?.file ?? null,
+              escolhido?.kind === "image" || escolhido?.kind === "video" ? escolhido.kind : null,
+              escolhido?.source ?? null
+            );
           }}
         >
           ▶ Iniciar
         </button>
       </div>
       <div style={{ marginTop: 10 }}>
-        <label className="input-label" style={{ fontSize: "0.75rem" }}>Imagem ou vídeo (opcional)</label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <label className="input-label" style={{ fontSize: "0.75rem", margin: 0 }}>Imagem ou vídeo (opcional)</label>
+          <button
+            type="button"
+            className="act-btn ghost"
+            style={{ fontSize: "0.72rem", padding: "4px 8px" }}
+            onClick={onUploadNew}
+          >
+            <Icon name="upload" size={13} /> Enviar novo
+          </button>
+        </div>
         <select
           className="input-field"
           value={mediaId}
@@ -102,7 +142,7 @@ export function CountdownControl({
           <option value="">Nenhuma — só o relógio</option>
           {opcoesDeMidia.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.title} ({m.kind === "video" ? "vídeo" : "imagem"})
+              {m.title} ({m.kind === "video" ? (m.source === "youtube" ? "vídeo do YouTube" : "vídeo") : "imagem"})
             </option>
           ))}
         </select>

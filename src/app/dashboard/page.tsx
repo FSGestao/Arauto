@@ -14,8 +14,13 @@ import type {
   ServiceItem,
   Service,
   LibraryFilter,
+  BibleBook,
+  BibleVerse,
+  BibleTranslationData,
+  BibleTranslationMeta,
+  BibleReference,
 } from "./types";
-import { getAuthHeaders, getAuthToken, formatCountdown, formatTime, formatTimestamp, STEP_LABEL } from "./utils";
+import { getAuthHeaders, getAuthToken, formatCountdown, formatTime, formatTimestamp, STEP_LABEL, parseBibleReference, compareVersions } from "./utils";
 import { BACKGROUND_PRESETS, PRESET_PREFIX } from "../../lib/backgroundPresets";
 import { Icon } from "./components/Icon";
 import { EditableCurrentLine } from "./components/EditableCurrentLine";
@@ -27,6 +32,8 @@ import { SongModal, LyricsEditorModal } from "./components/SongModals";
 import { AnnouncementModal, TemplateModal, UseTemplateModal } from "./components/AnnouncementModals";
 import { ServiceModal, ServiceEditorModal } from "./components/ServiceModals";
 import { SettingsModal } from "./components/SettingsModal";
+import { OnboardingModal, ReleaseNotesModal, type ReleaseNoteEntry } from "./components/HelpModals";
+import { BibleUploadModal } from "./components/BibleModals";
 
 export default function DashboardPage() {
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -40,6 +47,23 @@ export default function DashboardPage() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [mediaLibrary, setMediaLibrary] = useState<MediaItem[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
+  // "Como usar" (primeira vez) e Notas de versão (depois de uma
+  // atualização) — decididos comparando a versão instalada com a última
+  // que essa instalação já viu (settings.lastSeenVersion).
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showReleaseNotes, setShowReleaseNotes] = useState(false);
+  const [releaseNotesEntries, setReleaseNotesEntries] = useState<ReleaseNoteEntry[]>([]);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  // Bíblia: a lista só tem metadados (nome/licença/contagem) — o texto
+  // completo de uma tradução (pode passar de 30 mil versículos) só é
+  // buscado quando ela é selecionada, não no carregamento do painel.
+  const [bibleTranslations, setBibleTranslations] = useState<BibleTranslationMeta[]>([]);
+  const [bibleTranslationId, setBibleTranslationId] = useState<string | null>(null);
+  const [bibleData, setBibleData] = useState<BibleTranslationData | null>(null);
+  const [bibleLoading, setBibleLoading] = useState(false);
+  const [bibleBookAbbrev, setBibleBookAbbrev] = useState<string | null>(null);
+  const [bibleChapter, setBibleChapter] = useState(1);
+  const [showBibleUploadModal, setShowBibleUploadModal] = useState(false);
   const [networkUrls, setNetworkUrls] = useState<string[]>([]);
   const [stageUrls, setStageUrls] = useState<string[]>([]);
 
@@ -57,6 +81,7 @@ export default function DashboardPage() {
     startedAt: null,
     announcement: null,
     media: null,
+    bible: null,
     nextMedia: null,
     countdownEndsAt: null,
     countdownTitle: null,
@@ -91,6 +116,23 @@ export default function DashboardPage() {
   const [quickText, setQuickText] = useState({ title: "", content: "" });
   // Índice do card do roteiro sendo arrastado (kanban), enquanto o arraste dura.
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  // Tirar um item do roteiro em preparo exige clicar duas vezes (o "×" vira
+  // "Remover?" por 3s) — o botão fica colado no card, fácil de acertar sem
+  // querer ao clicar em outra coisa por perto.
+  const [confirmRemoveItemId, setConfirmRemoveItemId] = useState<string | null>(null);
+  const confirmRemoveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function handleRemoveItemClick(item: ServiceItem) {
+    if (!activeService) return;
+    if (confirmRemoveItemId === item.id) {
+      if (confirmRemoveTimer.current) clearTimeout(confirmRemoveTimer.current);
+      setConfirmRemoveItemId(null);
+      saveServiceItems(activeService, activeService.items.filter((x) => x.id !== item.id));
+      return;
+    }
+    setConfirmRemoveItemId(item.id);
+    if (confirmRemoveTimer.current) clearTimeout(confirmRemoveTimer.current);
+    confirmRemoveTimer.current = setTimeout(() => setConfirmRemoveItemId(null), 3000);
+  }
   // Busca global (Ctrl+K) — acessível de qualquer aba, sem tirar a mão do teclado.
   const [showSearch, setShowSearch] = useState(false);
   // Popover da contagem regressiva, aberto a partir do Timer na dock.
@@ -146,7 +188,65 @@ export default function DashboardPage() {
         setStageUrls(data.stageUrls || []);
       })
       .catch(() => {});
+
+    fetch("/api/version")
+      .then((r) => r.json())
+      .then((data) => setAppVersion(data.version))
+      .catch(() => {});
   }, []);
+
+  // ─── "Como usar" na primeira vez, notas de versão depois de atualizar ──
+  // Só decide depois que TANTO a versão instalada QUANTO as configurações
+  // (que guardam a última versão vista) já chegaram — e só uma vez, senão
+  // reabriria o popup toda vez que `settings` mudasse por outro motivo (ex.:
+  // salvar uma cor na aba Aparência).
+  const versionCheckDone = useRef(false);
+  useEffect(() => {
+    if (versionCheckDone.current || !appVersion || !settings) return;
+    versionCheckDone.current = true;
+
+    if (!settings.lastSeenVersion) {
+      setShowOnboarding(true);
+      return;
+    }
+    if (settings.lastSeenVersion !== appVersion) {
+      fetch("/api/release-notes")
+        .then((r) => r.json())
+        .then((all: ReleaseNoteEntry[]) => {
+          const missed = all.filter((n) => compareVersions(n.version, settings.lastSeenVersion!) > 0);
+          setReleaseNotesEntries(missed.length > 0 ? missed : all.slice(0, 1));
+          if (all.length > 0) setShowReleaseNotes(true);
+        })
+        .catch(() => {});
+    }
+  }, [appVersion, settings]);
+
+  // Acesso manual (botões em Configurações → Sobre) — mostra o histórico
+  // inteiro, não só o que faltava ver.
+  function openOnboarding() {
+    setShowOnboarding(true);
+  }
+  function openReleaseNotesHistory() {
+    fetch("/api/release-notes")
+      .then((r) => r.json())
+      .then((all: ReleaseNoteEntry[]) => {
+        setReleaseNotesEntries(all);
+        setShowReleaseNotes(true);
+      })
+      .catch(() => {});
+  }
+
+  function markVersionSeen() {
+    if (!appVersion) return;
+    fetch("/api/settings", {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ lastSeenVersion: appVersion }),
+    })
+      .then((r) => r.json())
+      .then(setSettings)
+      .catch(() => {});
+  }
 
   // ─── Socket.IO — controla a projeção em tempo real ───
   useEffect(() => {
@@ -197,6 +297,18 @@ export default function DashboardPage() {
       .catch(console.error);
   }, []);
 
+  // Só os metadados (leve) — o texto de uma tradução é buscado à parte,
+  // sob demanda, ver o efeito com bibleTranslationId abaixo.
+  const fetchBibleTranslations = useCallback(() => {
+    fetch("/api/bible/translations")
+      .then((r) => r.json())
+      .then((list: BibleTranslationMeta[]) => {
+        setBibleTranslations(list);
+        setBibleTranslationId((prev) => (prev && list.some((t) => t.id === prev) ? prev : list[0]?.id ?? null));
+      })
+      .catch(console.error);
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     fetchAnnouncements();
@@ -204,7 +316,27 @@ export default function DashboardPage() {
     fetchSongs();
     fetchServices();
     fetchMedia();
-  }, [user, fetchAnnouncements, fetchTemplates, fetchSongs, fetchServices, fetchMedia]);
+    fetchBibleTranslations();
+  }, [user, fetchAnnouncements, fetchTemplates, fetchSongs, fetchServices, fetchMedia, fetchBibleTranslations]);
+
+  // Carrega o texto completo da tradução escolhida (pode ser uns MB) só
+  // quando ela muda — não a cada render do painel.
+  useEffect(() => {
+    if (!bibleTranslationId) {
+      setBibleData(null);
+      return;
+    }
+    setBibleLoading(true);
+    fetch(`/api/bible/translations/${bibleTranslationId}`)
+      .then((r) => r.json())
+      .then((data: BibleTranslationData) => {
+        setBibleData(data);
+        setBibleBookAbbrev(data.books[0]?.abbrev ?? null);
+        setBibleChapter(1);
+      })
+      .catch(console.error)
+      .finally(() => setBibleLoading(false));
+  }, [bibleTranslationId]);
 
   // ─── Busca global (Ctrl+K / Cmd+K) ────────────────────
   // Funciona de qualquer aba, sem precisar clicar em nada antes — é o "achar
@@ -220,6 +352,28 @@ export default function DashboardPage() {
     }
     window.addEventListener("keydown", handleGlobalKey);
     return () => window.removeEventListener("keydown", handleGlobalKey);
+  }, []);
+
+  // ─── Avançar/voltar o roteiro ao vivo pelo teclado ────
+  // Sob pressão, o operador olha pro projetor, não pro mouse — precisar
+  // mirar num botão pequeno pra cada linha/item é atrito desnecessário.
+  // Só age quando o foco não está num campo de texto (senão espaço/setas
+  // digitados numa busca ou letra iam sem querer trocar o que está no ar).
+  useEffect(() => {
+    function handleRoteiroKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) return;
+      if (e.key === "ArrowRight" || e.key === " ") {
+        e.preventDefault();
+        roteiroNext();
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        roteiroPrev();
+      }
+    }
+    window.addEventListener("keydown", handleRoteiroKey);
+    return () => window.removeEventListener("keydown", handleRoteiroKey);
   }, []);
 
   // ─── Contagem regressiva: força re-render a cada segundo ──
@@ -288,12 +442,70 @@ export default function DashboardPage() {
   }
 
   // ─── Contagem regressiva ──────────────────────────────
-  function startCountdown(seconds: number, title: string, mediaFile: string | null, mediaKind: "image" | "video" | null) {
+  function startCountdown(
+    seconds: number,
+    title: string,
+    mediaFile: string | null,
+    mediaKind: "image" | "video" | null,
+    mediaSource: "upload" | "youtube" | null
+  ) {
     if (!(seconds > 0)) return;
-    socketRef.current?.emit("admin:startCountdown", { seconds, title, mediaFile, mediaKind });
+    socketRef.current?.emit("admin:startCountdown", { seconds, title, mediaFile, mediaKind, mediaSource });
   }
   function stopCountdown() {
     socketRef.current?.emit("admin:stopCountdown");
+  }
+
+  // ─── Bíblia ─────────────────────────────────────────────
+  function buildBibleReference(book: BibleBook, chapterNumber: number, verse: BibleVerse): BibleReference | null {
+    if (!bibleTranslationId || !bibleData) return null;
+    return {
+      translationId: bibleTranslationId,
+      translationName: bibleData.name,
+      book: book.name,
+      bookAbbrev: book.abbrev,
+      chapter: chapterNumber,
+      verse: verse.number,
+      text: verse.text,
+    };
+  }
+
+  function selectBibleVerse(book: BibleBook, chapterNumber: number, verse: BibleVerse) {
+    const ref = buildBibleReference(book, chapterNumber, verse);
+    if (ref) socketRef.current?.emit("admin:selectBibleVerse", ref);
+  }
+
+  // Versículo como item do roteiro — mesmo formato de "Adicionar ao Roteiro"
+  // das músicas/avisos/mídia, só que sem um id numa coleção pra referenciar:
+  // o versículo (já resolvido) vai embutido no próprio ServiceItem.
+  function addBibleVerseToRoteiro(book: BibleBook, chapterNumber: number, verse: BibleVerse) {
+    const ref = buildBibleReference(book, chapterNumber, verse);
+    if (!ref) return;
+    if (!activeService) {
+      showToast("error", "Crie um culto primeiro (filtro Cultos)");
+      return;
+    }
+    const newItem: ServiceItem = { id: crypto.randomUUID(), type: "bible", refId: 0, bible: ref };
+    saveServiceItems(
+      activeService,
+      [...activeService.items, newItem],
+      `"${ref.book} ${ref.chapter}:${ref.verse}" foi para ${activeService.title}`
+    );
+    if (live.service && live.service.id === activeService.id) {
+      socketRef.current?.emit("admin:appendStep", { kind: "bible", bible: ref });
+    }
+  }
+
+  async function deleteBibleTranslation(id: string) {
+    if (!confirm("Remover esta tradução da Bíblia? O texto salvo será apagado.")) return;
+    const res = await fetch(`/api/bible/translations/${id}`, { method: "DELETE", headers: getAuthHeaders() });
+    if (res.ok) {
+      showToast("success", "Tradução removida");
+      if (bibleTranslationId === id) setBibleTranslationId(null);
+      fetchBibleTranslations();
+    } else {
+      showToast("error", "Erro ao remover tradução");
+    }
   }
 
   // ─── Cronômetro de palco (só aparece em /stage) ────────
@@ -334,27 +546,38 @@ export default function DashboardPage() {
   // (não uma linha de letra — a letra avança por dentro do mesmo passo), e
   // cada aviso é um passo. É essa lista de eventos que aparece como cards no
   // roteiro e que dá pra reordenar arrastando.
-  function buildSteps(service: Service) {
-    const steps: Array<
-      | { kind: "lyrics"; song: Song; lineIndex: number }
-      | { kind: "announcement"; announcement: Announcement }
-      | { kind: "media"; media: MediaItem }
-    > = [];
+  type Step =
+    | { kind: "lyrics"; song: Song; lineIndex: number }
+    | { kind: "announcement"; announcement: Announcement }
+    | { kind: "media"; media: MediaItem }
+    | { kind: "bible"; bible: BibleReference };
+
+  function buildStep(item: ServiceItem): Step | null {
+    if (item.type === "song") {
+      const song = songs.find((s) => s.id === item.refId);
+      if (!song) return null;
+      return { kind: "lyrics", song, lineIndex: song.lyrics.length > 0 ? 0 : -1 };
+    }
+    if (item.type === "media") {
+      const media = mediaLibrary.find((m) => m.id === item.refId);
+      if (!media) return null;
+      return { kind: "media", media };
+    }
+    if (item.type === "bible") {
+      if (!item.bible) return null;
+      return { kind: "bible", bible: item.bible };
+    }
+    const announcement = announcements.find((a) => a.id === item.refId);
+    if (!announcement) return null;
+    return { kind: "announcement", announcement };
+  }
+
+  function buildSteps(service: Service): Step[] {
+    const steps: Step[] = [];
     for (const item of service.items) {
       if (item.skip) continue; // desmarcado no roteiro: não entra nesta apresentação
-      if (item.type === "song") {
-        const song = songs.find((s) => s.id === item.refId);
-        if (!song) continue;
-        steps.push({ kind: "lyrics", song, lineIndex: song.lyrics.length > 0 ? 0 : -1 });
-      } else if (item.type === "media") {
-        const media = mediaLibrary.find((m) => m.id === item.refId);
-        if (!media) continue;
-        steps.push({ kind: "media", media });
-      } else {
-        const announcement = announcements.find((a) => a.id === item.refId);
-        if (!announcement) continue;
-        steps.push({ kind: "announcement", announcement });
-      }
+      const step = buildStep(item);
+      if (step) steps.push(step);
     }
     return steps;
   }
@@ -389,7 +612,16 @@ export default function DashboardPage() {
       showToast("error", "Crie um culto primeiro (filtro Cultos)");
       return;
     }
-    saveServiceItems(service, [...service.items, { id: crypto.randomUUID(), type, refId }], `"${label}" foi para ${service.title}`);
+    const newItem: ServiceItem = { id: crypto.randomUUID(), type, refId };
+    saveServiceItems(service, [...service.items, newItem], `"${label}" foi para ${service.title}`);
+    // Se esse culto já está no ar, o servidor guarda os passos numa cópia
+    // própria (montada só quando "Apresentar" foi clicado) — sem avisar
+    // ela também, o item novo só apareceria na lista lateral na próxima
+    // vez que o culto fosse apresentado de novo, não nesta apresentação.
+    if (live.service && live.service.id === service.id) {
+      const step = buildStep(newItem);
+      if (step) socketRef.current?.emit("admin:appendStep", step);
+    }
   }
 
   function roteiroNext() {
@@ -513,6 +745,7 @@ export default function DashboardPage() {
     { id: "songs", icon: "lyrics", label: "Letras" },
     { id: "announcements", icon: "bell", label: "Avisos" },
     { id: "media", icon: "media", label: "Mídia" },
+    { id: "bible", icon: "book", label: "Bíblia" },
     { id: "services", icon: "layers", label: "Cultos" },
   ];
 
@@ -540,6 +773,34 @@ export default function DashboardPage() {
   const visibleMedia = mediaLibrary.filter((m) => !q || m.title.toLowerCase().includes(q));
   const visibleServices = services.filter((sv) => !q || sv.title.toLowerCase().includes(q));
 
+  // Bíblia: primeiro tenta reconhecer uma REFERÊNCIA ("jo 3:16", "salmos
+  // 23") — é o jeito mais rápido de achar um versículo específico no meio
+  // de um culto, muito mais rápido que digitar um trecho do texto. Só cai
+  // pra busca por palavra (em todo o texto da tradução) se não for uma
+  // referência reconhecível.
+  const bibleSearchResults: { book: BibleBook; chapter: number; verse: BibleVerse }[] = [];
+  if (filter === "bible" && bibleData && q.length >= 2) {
+    const ref = parseBibleReference(q, bibleData.books);
+    if (ref) {
+      const chapter = ref.book.chapters.find((c) => c.number === ref.chapter);
+      const verses = ref.verse ? chapter?.verses.filter((v) => v.number === ref.verse) ?? [] : chapter?.verses ?? [];
+      for (const verse of verses) bibleSearchResults.push({ book: ref.book, chapter: ref.chapter, verse });
+    } else {
+      search: for (const book of bibleData.books) {
+        for (const chapter of book.chapters) {
+          for (const verse of chapter.verses) {
+            if (verse.text.toLowerCase().includes(q)) {
+              bibleSearchResults.push({ book, chapter: chapter.number, verse });
+              if (bibleSearchResults.length >= 200) break search;
+            }
+          }
+        }
+      }
+    }
+  }
+  const bibleActiveBook = bibleData?.books.find((b) => b.abbrev === bibleBookAbbrev) ?? null;
+  const bibleActiveChapter = bibleActiveBook?.chapters.find((c) => c.number === bibleChapter) ?? bibleActiveBook?.chapters[0] ?? null;
+
   // Rótulo de um item do roteiro em preparo (o culto salvo, sem estar no ar).
   function serviceItemLabel(item: ServiceItem): { label: string; icon: string } {
     if (item.type === "song") {
@@ -549,6 +810,12 @@ export default function DashboardPage() {
     if (item.type === "media") {
       const m = mediaLibrary.find((x) => x.id === item.refId);
       return { label: m ? m.title : "(mídia removida)", icon: "media" };
+    }
+    if (item.type === "bible") {
+      return {
+        label: item.bible ? `${item.bible.book} ${item.bible.chapter}:${item.bible.verse}` : "(versículo)",
+        icon: "book",
+      };
     }
     const a = announcements.find((x) => x.id === item.refId);
     return { label: a ? a.title : "(aviso removido)", icon: "bell" };
@@ -604,14 +871,22 @@ export default function DashboardPage() {
           <div className="toolbar-spacer" />
 
           {/* Quantas telas de cada tipo estão conectadas agora — pra saber
-              ANTES do culto se o projetor está mesmo recebendo o sinal. */}
-          <div
-            className="toolbar-connections"
-            title={`Telas conectadas: ${connections.admin} painel(is), ${connections.projection} projeção, ${connections.stage} stage`}
-          >
-            <span className={`conn-dot ${connections.admin > 1 ? "warn" : "on"}`} />
-            <span className={`conn-dot ${connections.projection > 0 ? "on" : "off"}`} />
-            <span className={`conn-dot ${connections.stage > 0 ? "on" : "off"}`} />
+              ANTES do culto se o projetor está mesmo recebendo o sinal.
+              Rótulo sempre visível (não só no hover): sem treinamento
+              prévio, ninguém adivinha o que três bolinhas sem texto significam. */}
+          <div className="toolbar-connections" title="Telas conectadas agora">
+            <span className="conn-item">
+              <span className={`conn-dot ${connections.admin > 1 ? "warn" : "on"}`} />
+              Painel
+            </span>
+            <span className="conn-item">
+              <span className={`conn-dot ${connections.projection > 0 ? "on" : "off"}`} />
+              Projeção
+            </span>
+            <span className="conn-item">
+              <span className={`conn-dot ${connections.stage > 0 ? "on" : "off"}`} />
+              Palco
+            </span>
           </div>
 
           <div className="toolbar-actions">
@@ -638,13 +913,13 @@ export default function DashboardPage() {
         {/* ─── Corpo: biblioteca + roteiro ───────────────── */}
         <div className="cockpit-body">
           <section className="cockpit-card cockpit-library">
-            <div className={`library-split ${filter === "songs" ? "" : "single"}`}>
+            <div className={`library-split ${filter === "songs" || filter === "bible" || filter === "services" ? "" : "single"}`}>
               <div className="library-header">
-                <div className="library-filter">
+                <div className="library-filter" style={filter === "bible" ? { flexBasis: "100%" } : undefined}>
                 <Icon name="search" />
                 <input
                   type="text"
-                  placeholder="Buscar ou filtrar..."
+                  placeholder={filter === "bible" ? "Ex: jo 3:16, salmos 23..." : "Buscar ou filtrar..."}
                   value={librarySearch}
                   onChange={(e) => setLibrarySearch(e.target.value)}
                 />
@@ -679,7 +954,46 @@ export default function DashboardPage() {
                   <Icon name="plus" /> Novo Culto
                 </button>
               )}
+              {filter === "bible" && (
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <select
+                    className="input-field"
+                    style={{ width: 220 }}
+                    value={bibleTranslationId ?? ""}
+                    onChange={(e) => setBibleTranslationId(e.target.value || null)}
+                  >
+                    {bibleTranslations.length === 0 && <option value="">Nenhuma instalada</option>}
+                    {bibleTranslations.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                  {bibleTranslationId &&
+                    bibleTranslations.find((t) => t.id === bibleTranslationId)?.origin === "upload" && (
+                      <button
+                        className="act-btn ghost danger"
+                        onClick={() => deleteBibleTranslation(bibleTranslationId)}
+                        title="Remover esta tradução"
+                      >
+                        <Icon name="trash" />
+                      </button>
+                    )}
+                  <button className="act-btn primary" onClick={() => setShowBibleUploadModal(true)}>
+                    <Icon name="upload" /> Importar Bíblia
+                  </button>
                 </div>
+              )}
+                </div>
+
+              {/* Licença da tradução escolhida — importante sobretudo pra
+                  quem enviou uma própria: a responsabilidade pelos direitos
+                  de uso é de quem fez o upload, o Arauto não valida isso. */}
+              {filter === "bible" && bibleTranslationId && (
+                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "-6px 0 12px" }}>
+                  Licença: {bibleTranslations.find((t) => t.id === bibleTranslationId)?.license}
+                </p>
+              )}
 
               {/* Fundos prontos: gradientes/animações em CSS, sem precisar
                   enviar arquivo. Ficam junto do filtro Mídia porque é onde
@@ -713,6 +1027,17 @@ export default function DashboardPage() {
                       </button>
                     );
                   })}
+                  {/* Atalho pra enviar um fundo próprio sem ter que sair
+                      deste painel pra procurar o botão certo na lista. */}
+                  <button
+                    className="act-btn ghost"
+                    title="Enviar vídeo ou imagem para usar como fundo"
+                    style={{ flexDirection: "column", height: 64, width: 64, padding: 4, fontSize: "0.68rem", gap: 4 }}
+                    onClick={() => setShowMediaModal(true)}
+                  >
+                    <Icon name="upload" size={20} />
+                    Enviar
+                  </button>
                 </div>
               )}
 
@@ -1020,6 +1345,70 @@ export default function DashboardPage() {
                       </div>
                     ))
                   ))}
+
+                {/* ─── BÍBLIA ─────────────────────────── */}
+                {filter === "bible" &&
+                  (!bibleData ? (
+                    <div className="roteiro-empty">
+                      {bibleLoading ? "Carregando tradução..." : "Nenhuma tradução instalada."}
+                    </div>
+                  ) : q.length >= 2 ? (
+                    bibleSearchResults.length === 0 ? (
+                      <div className="roteiro-empty">Nada encontrado com esse filtro.</div>
+                    ) : (
+                      bibleSearchResults.map((r) => {
+                        const isLive =
+                          live.mode === "bible" &&
+                          live.bible?.bookAbbrev === r.book.abbrev &&
+                          live.bible.chapter === r.chapter &&
+                          live.bible.verse === r.verse.number;
+                        return (
+                          <div
+                            key={`${r.book.abbrev}-${r.chapter}-${r.verse.number}`}
+                            className={`library-item ${isLive ? "active" : ""}`}
+                            onClick={() => {
+                              setBibleBookAbbrev(r.book.abbrev);
+                              setBibleChapter(r.chapter);
+                              selectBibleVerse(r.book, r.chapter, r.verse);
+                            }}
+                            title="Clique para colocar este versículo no ar"
+                          >
+                            <button
+                              className="act-btn ghost"
+                              style={{ position: "absolute", top: 10, right: 10, padding: "4px 8px", fontSize: "0.7rem" }}
+                              title="Adicionar ao Roteiro"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                addBibleVerseToRoteiro(r.book, r.chapter, r.verse);
+                              }}
+                            >
+                              <Icon name="plus" size={13} />
+                            </button>
+                            <p className="library-item-title">
+                              {r.book.name} {r.chapter}:{r.verse.number}
+                            </p>
+                            <p className="library-item-sub">{r.verse.text}</p>
+                          </div>
+                        );
+                      })
+                    )
+                  ) : (
+                    bibleData.books.map((b) => (
+                      <div
+                        key={b.abbrev}
+                        className={`library-item ${bibleBookAbbrev === b.abbrev ? "active" : ""}`}
+                        onClick={() => {
+                          setBibleBookAbbrev(b.abbrev);
+                          setBibleChapter(1);
+                        }}
+                      >
+                        <p className="library-item-title">{b.name}</p>
+                        <p className="library-item-sub">
+                          {b.chapters.length} {b.chapters.length === 1 ? "capítulo" : "capítulos"}
+                        </p>
+                      </div>
+                    ))
+                  ))}
               </div>
 
               {/* ── Detalhe da música: letra com marca de tempo (coluna 2) ── */}
@@ -1093,6 +1482,125 @@ export default function DashboardPage() {
                   )}
                 </div>
               )}
+
+              {/* ── Detalhe da Bíblia: capítulo com os versículos (coluna 2) ── */}
+              {filter === "bible" && (
+                <div className="library-detail">
+                  {!bibleData ? (
+                    <div className="roteiro-empty">Escolha ou importe uma tradução.</div>
+                  ) : !bibleActiveBook || !bibleActiveChapter ? (
+                    <div className="roteiro-empty">Escolha um livro na lista.</div>
+                  ) : (
+                    <>
+                      <div className="library-item" style={{ cursor: "default" }}>
+                        <p className="library-item-title">
+                          {bibleActiveBook.name} {bibleActiveChapter.number}
+                        </p>
+                        <p className="library-item-sub">{bibleData.name}</p>
+                        <div className="library-item-actions">
+                          <button
+                            className="act-btn ghost"
+                            disabled={bibleChapter <= 1}
+                            onClick={() => setBibleChapter((c) => Math.max(1, c - 1))}
+                          >
+                            <Icon name="chevronLeft" /> Capítulo anterior
+                          </button>
+                          <button
+                            className="act-btn ghost"
+                            disabled={bibleChapter >= bibleActiveBook.chapters.length}
+                            onClick={() =>
+                              setBibleChapter((c) => Math.min(bibleActiveBook.chapters.length, c + 1))
+                            }
+                          >
+                            Próximo capítulo <Icon name="chevronRight" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="lyrics-pane">
+                        {bibleActiveChapter.verses.map((v) => {
+                          const isLive =
+                            live.mode === "bible" &&
+                            live.bible?.bookAbbrev === bibleActiveBook.abbrev &&
+                            live.bible.chapter === bibleActiveChapter.number &&
+                            live.bible.verse === v.number;
+                          return (
+                            <div key={v.number} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              <div
+                                className={`lyric-row ${isLive ? "current" : ""}`}
+                                style={{ flex: 1 }}
+                                onClick={() => selectBibleVerse(bibleActiveBook, bibleActiveChapter.number, v)}
+                                title="Clique para colocar este versículo no ar"
+                              >
+                                <span className="lyric-time">{v.number}</span>
+                                <span className="lyric-text">{v.text}</span>
+                              </div>
+                              <button
+                                className="act-btn ghost"
+                                style={{ padding: "4px 8px", fontSize: "0.7rem", flexShrink: 0 }}
+                                title="Adicionar ao Roteiro"
+                                onClick={() => addBibleVerseToRoteiro(bibleActiveBook, bibleActiveChapter.number, v)}
+                              >
+                                <Icon name="plus" size={13} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ── Detalhe do culto: itens do roteiro (coluna 2) — evita ter
+                  que abrir "Editar" só pra ver o que já está montado. ── */}
+              {filter === "services" && (
+                <div className="library-detail">
+                  {!activeService ? (
+                    <div className="roteiro-empty">Escolha um culto na lista para ver o roteiro.</div>
+                  ) : (
+                    <>
+                      <div className="library-item" style={{ cursor: "default" }}>
+                        <p className="library-item-title">{activeService.title}</p>
+                        <p className="library-item-sub">
+                          {activeService.date ? new Date(activeService.date).toLocaleDateString("pt-BR") : "Sem data"} ·{" "}
+                          {activeService.items.length} {activeService.items.length === 1 ? "item" : "itens"}
+                        </p>
+                        <div className="library-item-actions">
+                          <button className="act-btn primary" onClick={() => startService(activeService)}>
+                            <Icon name="play" /> Apresentar
+                          </button>
+                          <button className="act-btn ghost" onClick={() => setEditingService(activeService)}>
+                            <Icon name="pencil" /> Editar
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="lyrics-pane">
+                        {activeService.items.length === 0 ? (
+                          <div className="roteiro-empty">
+                            Roteiro vazio.
+                            <br />
+                            Use &ldquo;Editar&rdquo; ou os botões &ldquo;+ Adicionar ao Roteiro&rdquo; da biblioteca.
+                          </div>
+                        ) : (
+                          activeService.items.map((item, i) => {
+                            const info = serviceItemLabel(item);
+                            return (
+                              <div key={item.id} className="lyric-row" style={{ cursor: "default" }}>
+                                <span className="lyric-time">{i + 1}.</span>
+                                <span className="lyric-text">
+                                  <Icon name={info.icon} size={13} /> {info.label}
+                                </span>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </section>
 
@@ -1138,6 +1646,18 @@ export default function DashboardPage() {
                 )
               )}
             </div>
+
+            {/* Avisa quando o culto está no ar mas ninguém abriu a Stage
+                View — sem isso, quem está no palco fica sem monitor de
+                confiança e ninguém percebe até reclamarem depois. */}
+            {live.service && connections.stage === 0 && (
+              <div className="roteiro-notice">
+                <p>Stage View não está aberta — quem está no palco não vê o monitor de confiança</p>
+                <button className="act-btn ghost" onClick={openStageWindow}>
+                  Abrir Stage View
+                </button>
+              </div>
+            )}
 
             {live.service && live.interjecting && (
               <div className="roteiro-notice">
@@ -1220,7 +1740,7 @@ export default function DashboardPage() {
                         {i + 1}. {step.label}
                       </span>
                       <span className="roteiro-step-kind" title={step.sublabel}>
-                        <Icon name={step.kind === "lyrics" ? "lyrics" : step.kind === "media" ? "media" : "bell"} />
+                        <Icon name={step.kind === "lyrics" ? "lyrics" : step.kind === "media" ? "media" : step.kind === "bible" ? "book" : "bell"} />
                       </span>
                     </div>
                   );
@@ -1287,14 +1807,14 @@ export default function DashboardPage() {
                       </span>
                       <button
                         className="roteiro-step-remove"
-                        title="Tirar do roteiro"
-                        onClick={() =>
-                          saveServiceItems(
-                            activeService,
-                            activeService.items.filter((x) => x.id !== item.id)
-                          )
-                        }
+                        style={confirmRemoveItemId === item.id ? { width: "auto", padding: "0 8px", fontSize: "0.68rem" } : undefined}
+                        title={confirmRemoveItemId === item.id ? "Clique de novo para confirmar" : "Tirar do roteiro"}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveItemClick(item);
+                        }}
                       >
+                        {confirmRemoveItemId === item.id && "Remover? "}
                         <Icon name="trash" />
                       </button>
                     </div>
@@ -1450,6 +1970,7 @@ export default function DashboardPage() {
                 mediaLibrary={mediaLibrary}
                 onStart={startCountdown}
                 onStop={stopCountdown}
+                onUploadNew={() => setShowMediaModal(true)}
               />
             ) : (
               <StageTimerControl
@@ -1541,6 +2062,18 @@ export default function DashboardPage() {
         />
       )}
 
+      {showBibleUploadModal && (
+        <BibleUploadModal
+          onClose={() => setShowBibleUploadModal(false)}
+          onSaved={(meta) => {
+            fetchBibleTranslations();
+            setBibleTranslationId(meta.id);
+            setShowBibleUploadModal(false);
+            showToast("success", `"${meta.name}" importada — ${meta.verseCount} versículos`);
+          }}
+        />
+      )}
+
       {showServiceModal && (
         <ServiceModal
           onClose={() => setShowServiceModal(false)}
@@ -1560,6 +2093,8 @@ export default function DashboardPage() {
           songs={songs}
           announcements={announcements}
           mediaLibrary={mediaLibrary}
+          bibleData={bibleData}
+          bibleTranslationId={bibleTranslationId}
           onClose={() => setEditingService(null)}
           onSaved={() => {
             fetchServices();
@@ -1598,12 +2133,35 @@ export default function DashboardPage() {
           stageUrls={stageUrls}
           onClose={() => setShowSettingsModal(false)}
           onLogout={handleLogout}
+          onShowOnboarding={openOnboarding}
+          onShowReleaseNotes={openReleaseNotesHistory}
           onSaved={(s) => {
             setSettings(s);
             // Avisa as telas já abertas (projeção, stage): elas carregaram as
             // cores na abertura e não teriam como saber que mudaram.
             socketRef.current?.emit("admin:settingsChanged");
             showToast("success", "Configurações salvas!");
+          }}
+        />
+      )}
+
+      {/* ─── "Como usar" (primeira vez ou sob demanda) ──── */}
+      {showOnboarding && (
+        <OnboardingModal
+          onClose={() => {
+            setShowOnboarding(false);
+            markVersionSeen();
+          }}
+        />
+      )}
+
+      {/* ─── Notas de versão (depois de atualizar ou sob demanda) ── */}
+      {showReleaseNotes && (
+        <ReleaseNotesModal
+          notes={releaseNotesEntries}
+          onClose={() => {
+            setShowReleaseNotes(false);
+            markVersionSeen();
           }}
         />
       )}

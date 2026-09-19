@@ -22,9 +22,56 @@ export const STEP_LABEL: Record<string, string> = {
   lyrics: "Música",
   announcement: "Aviso",
   media: "Mídia",
+  bible: "Versículo",
   countdown: "Contagem regressiva",
   idle: "Tela limpa",
 };
+
+/** Remove só o acento (mantém caixa/trim de fora). */
+function stripAccents(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+/** Reconhece uma referência bíblica digitada ("jo 3:16", "salmos 23",
+ *  "1co 13.4", "Apocalipse 21 4") e devolve o livro/capítulo/versículo —
+ *  ou `null` se o texto não for uma referência (cai pra busca por palavra).
+ *  Casa pela abreviação interna, pelo nome completo (com ou sem acento) ou
+ *  por um prefixo do nome, pra não depender de digitar a forma exata. */
+export function parseBibleReference<T extends { name: string; abbrev: string; chapters: { number: number }[] }>(
+  query: string,
+  books: T[]
+): { book: T; chapter: number; verse: number | null } | null {
+  const m = query.trim().match(/^([1-3]?\s*[a-zà-úA-ZÀ-Ú]+)\.?\s+(\d+)(?:[:.,\s]+(\d+))?\s*$/);
+  if (!m) return null;
+  const rawKey = m[1].toLowerCase().replace(/\s+/g, "");
+  const plainKey = stripAccents(rawKey);
+  const chapter = parseInt(m[2], 10);
+  const verse = m[3] ? parseInt(m[3], 10) : null;
+  if (!rawKey || !(chapter > 0)) return null;
+
+  // Abreviação é sensível a acento de propósito: sem isso, "jó" (o livro)
+  // e "jo" (abreviação de João) colidem depois de tirar o acento.
+  const book =
+    books.find((b) => b.abbrev.toLowerCase() === rawKey) ||
+    books.find((b) => stripAccents(b.name.toLowerCase()).replace(/\s+/g, "") === plainKey) ||
+    books.find((b) => stripAccents(b.name.toLowerCase()).replace(/\s+/g, "").startsWith(plainKey));
+  if (!book || chapter > book.chapters.length) return null;
+
+  return { book, chapter, verse };
+}
+
+/** Compara duas versões "x.y.z" — negativo se `a` for mais antiga que `b`,
+ *  positivo se mais nova, 0 se iguais. Usado pra saber quais notas de
+ *  versão o operador ainda não viu. */
+export function compareVersions(a: string, b: string): number {
+  const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
 
 /** Formata milissegundos restantes como mm:ss ou h:mm:ss — usado tanto no
  * painel do operador quanto (via a mesma lógica) na tela de projeção. */

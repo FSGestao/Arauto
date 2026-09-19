@@ -15,6 +15,12 @@ const { Server: SocketIOServer } = require("socket.io");
 const { getSecret, getLocalIPs } = require("./lib/shared");
 const jwt = require("jsonwebtoken");
 
+// Rede de segurança de último recurso: um erro que escape dos try/catch dos
+// handlers (ex.: dentro de um timer) não pode derrubar o processo e travar
+// a projeção pra todo mundo — melhor logar e continuar rodando.
+process.on("uncaughtException", (e) => console.error("Erro não tratado:", e));
+process.on("unhandledRejection", (e) => console.error("Promessa rejeitada sem tratamento:", e));
+
 function verifyToken(token) {
   try {
     return jwt.verify(token, getSecret());
@@ -25,7 +31,7 @@ function verifyToken(token) {
 
 function emptyState() {
   return {
-    mode: "idle", // "idle" | "lyrics" | "announcement" | "media" | "countdown"
+    mode: "idle", // "idle" | "lyrics" | "announcement" | "media" | "countdown" | "bible"
     song: null,
     lyricIndex: -1,
     isPlaying: false,
@@ -33,6 +39,9 @@ function emptyState() {
     announcement: null,
     // Item de mídia (áudio/vídeo) no ar, quando mode === "media".
     media: null,
+    // Versículo no ar, quando mode === "bible" — o painel já manda o
+    // texto resolvido (ver admin:selectBibleVerse), o servidor só repassa.
+    bible: null,
     // Arquivo de mídia do próximo passo visível do roteiro — a tela de
     // projeção usa isso pra pré-carregar e trocar sem engasgo.
     nextMedia: null,
@@ -46,6 +55,7 @@ function emptyState() {
     // evento) — o arquivo já enviado em Mídia, aqui só o nome + o tipo.
     countdownMediaFile: null,
     countdownMediaKind: null,
+    countdownMediaSource: null,
     // Presente quando um Culto (roteiro) está em apresentação; usado pela
     // tela de projeção e pelo painel pra mostrar "passo X de Y" e permitir
     // avançar/voltar globalmente (teclado/clique) além dos controles ad-hoc.
@@ -91,6 +101,21 @@ function summarizeStep(step) {
       skip: !!step.skip,
     };
   }
+  if (step.kind === "bible") {
+    // Defensivo: um passo "bible" sem o versículo embutido (dado antigo, de
+    // antes da correção que preservava esse campo ao salvar o roteiro) não
+    // pode derrubar o servidor pra todo mundo conectado — melhor mostrar um
+    // rótulo genérico do que travar a apresentação inteira.
+    if (!step.bible) {
+      return { kind: "bible", label: "(versículo)", sublabel: "", skip: !!step.skip };
+    }
+    return {
+      kind: "bible",
+      label: `${step.bible.book} ${step.bible.chapter}:${step.bible.verse}`,
+      sublabel: step.bible.text,
+      skip: !!step.skip,
+    };
+  }
   return {
     kind: "announcement",
     label: step.announcement.title,
@@ -129,10 +154,19 @@ function stepToLiveState(activeService) {
   if (step.kind === "media") {
     return { ...base, mode: "media", media: step.media, isPlaying: true };
   }
+  if (step.kind === "bible") {
+    return { ...base, mode: "bible", bible: step.bible };
+  }
   return { ...base, mode: "announcement", announcement: step.announcement };
 }
 
 async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = process.cwd() } = {}) {
+  // Código que lê arquivo com caminho relativo à raiz do app (seed da Bíblia,
+  // notas de versão) usa `process.cwd()` — sem isto, dentro do Electron
+  // empacotado o diretório de trabalho do processo nem sempre é a pasta do
+  // app (pode ser de onde o atalho foi aberto), e essas leituras falhariam
+  // silenciosamente só no instalador, nunca em desenvolvimento.
+  process.chdir(dir);
   const app = next({ dev, dir });
   const handle = app.getRequestHandler();
   await app.prepare();
@@ -266,7 +300,15 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
     function onlyAdmin(fn) {
       return (...args) => {
         if (!isAdmin) return;
-        fn(...args);
+        // Um erro inesperado aqui (ex.: dado antigo/corrompido vindo de um
+        // roteiro salvo antes de alguma correção) não pode derrubar o
+        // processo inteiro — isso travaria a projeção pra TODAS as telas
+        // conectadas (admin, projeção, palco), não só pra quem clicou.
+        try {
+          fn(...args);
+        } catch (e) {
+          console.error("Erro tratando evento do painel:", e);
+        }
       };
     }
 
@@ -355,6 +397,24 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
           ...emptyState(),
           mode: "announcement",
           announcement,
+          service: serviceInfoOf(activeService),
+          interjecting: !!activeService,
+        };
+        broadcast();
+      })
+    );
+
+    // Versículo avulso — mesma lógica de interjeição do aviso/música. O
+    // painel já resolveu o texto (buscou na tradução escolhida), o
+    // servidor só guarda e repassa, igual a admin:showAnnouncement.
+    socket.on(
+      "admin:selectBibleVerse",
+      onlyAdmin((bible) => {
+        if (!bible || typeof bible.text !== "string") return;
+        liveState = {
+          ...emptyState(),
+          mode: "bible",
+          bible,
           service: serviceInfoOf(activeService),
           interjecting: !!activeService,
         };
@@ -452,7 +512,7 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
     // lógica de interjeição: se houver um roteiro ativo, ele fica pausado.
     socket.on(
       "admin:startCountdown",
-      onlyAdmin(({ seconds, title, mediaFile, mediaKind }) => {
+      onlyAdmin(({ seconds, title, mediaFile, mediaKind, mediaSource }) => {
         if (typeof seconds !== "number" || !(seconds > 0)) return;
         liveState = {
           ...emptyState(),
@@ -461,6 +521,7 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
           countdownTitle: typeof title === "string" ? title : "",
           countdownMediaFile: typeof mediaFile === "string" && mediaFile ? mediaFile : null,
           countdownMediaKind: mediaKind === "image" || mediaKind === "video" ? mediaKind : null,
+          countdownMediaSource: mediaSource === "youtube" ? "youtube" : "upload",
           service: serviceInfoOf(activeService),
           interjecting: !!activeService,
         };
@@ -554,14 +615,35 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
     // conexão (inclusive a tela de projeção sem login), pois é só um "próximo
     // slide" enquanto uma apresentação já foi iniciada por um admin; escolher
     // qual roteiro toca continua exigindo login (admin:startService acima).
-    socket.on("roteiro:next", () => advance(1));
-    socket.on("roteiro:prev", () => advance(-1));
+    socket.on("roteiro:next", () => { try { advance(1); } catch (e) { console.error("Erro ao avançar roteiro:", e); } });
+    socket.on("roteiro:prev", () => { try { advance(-1); } catch (e) { console.error("Erro ao voltar roteiro:", e); } });
 
     // Arrastar um card do roteiro pra outra posição (kanban).
     socket.on(
       "admin:reorderSteps",
       onlyAdmin(({ from, to }) => {
         reorderSteps(from, to);
+      })
+    );
+
+    // "Adicionar ao Roteiro" na biblioteca, quando esse culto já está em
+    // apresentação: só acrescenta um passo no fim (o painel já manda o
+    // passo pronto, igual ao admin:startService) — não toca na posição
+    // atual nem no que está no ar, diferente de reconstruir tudo de novo.
+    socket.on(
+      "admin:appendStep",
+      onlyAdmin((step) => {
+        if (!activeService || !step || !step.kind) return;
+        activeService.steps.push(step);
+        const { steps } = activeService;
+        let n = activeService.stepIndex + 1;
+        while (n < steps.length && steps[n].skip) n++;
+        liveState = {
+          ...liveState,
+          service: serviceInfoOf(activeService),
+          nextMedia: mediaFileOfStep(steps[n]),
+        };
+        broadcast();
       })
     );
   });

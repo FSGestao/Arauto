@@ -233,6 +233,186 @@ body::before {
   100% { transform: translate(3%, -2%) scale(1); }
 }
 
+/* Poeira dourada subindo devagar — partículas âmbar num fundo quase preto. */
+.bg-preset-poeira-dourada {
+  background: radial-gradient(ellipse at 50% 60%, #1a1410 0%, #060402 70%);
+  overflow: hidden;
+}
+.bg-preset-poeira-dourada::after {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  background-image:
+    radial-gradient(2px 2px at 10% 85%, rgba(251,191,36,0.9), transparent),
+    radial-gradient(1.5px 1.5px at 25% 70%, rgba(245,158,11,0.8), transparent),
+    radial-gradient(2px 2px at 40% 90%, rgba(251,191,36,0.7), transparent),
+    radial-gradient(1.5px 1.5px at 55% 60%, rgba(217,119,6,0.8), transparent),
+    radial-gradient(2px 2px at 70% 85%, rgba(251,191,36,0.9), transparent),
+    radial-gradient(1.5px 1.5px at 85% 65%, rgba(245,158,11,0.7), transparent),
+    radial-gradient(2px 2px at 15% 45%, rgba(217,119,6,0.6), transparent),
+    radial-gradient(1.5px 1.5px at 65% 40%, rgba(251,191,36,0.6), transparent);
+  animation: dustRise 7s ease-in-out infinite;
+}
+@keyframes dustRise {
+  0%   { transform: translateY(0) scale(1); opacity: 0.6; }
+  50%  { transform: translateY(-22%) scale(1.06); opacity: 1; }
+  100% { transform: translateY(-40%) scale(1); opacity: 0.5; }
+}
+
+/* Brilho suspenso — glitter branco/dourado bem fino, quase estático, só
+   cintilando (reaproveita starTwinkle do fundo Estrelado). */
+.bg-preset-brilho-suspenso {
+  background: radial-gradient(ellipse at 50% 50%, #14121a 0%, #030203 75%);
+  overflow: hidden;
+}
+.bg-preset-brilho-suspenso::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 12% 20%, #fff, transparent),
+    radial-gradient(1px 1px at 28% 55%, #fde68a, transparent),
+    radial-gradient(0.8px 0.8px at 44% 30%, #fff, transparent),
+    radial-gradient(1px 1px at 60% 70%, #fde68a, transparent),
+    radial-gradient(0.8px 0.8px at 75% 40%, #fff, transparent),
+    radial-gradient(1px 1px at 88% 65%, #fde68a, transparent),
+    radial-gradient(0.8px 0.8px at 20% 82%, #fff, transparent),
+    radial-gradient(1px 1px at 52% 12%, #fde68a, transparent),
+    radial-gradient(0.8px 0.8px at 92% 22%, #fff, transparent);
+  animation: starTwinkle 5s ease-in-out infinite alternate;
+}
+
+/* Ondas serenas — teal/chumbo fluindo devagar na horizontal. */
+.bg-preset-ondas-serenas {
+  background: linear-gradient(100deg, #0f2027, #203a43, #2c5364, #203a43, #0f2027);
+  background-size: 300% 100%;
+  animation: waveDrift 10s ease-in-out infinite;
+}
+@keyframes waveDrift {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+
+/* Fitas de luz — manchas roxas/índigo alongadas, à deriva. */
+.bg-preset-fitas-de-luz { background: #0b0620; overflow: hidden; }
+.bg-preset-fitas-de-luz::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background-image:
+    radial-gradient(ellipse 60% 20% at 30% 40%, rgba(124,58,237,0.55), transparent),
+    radial-gradient(ellipse 55% 18% at 65% 60%, rgba(79,70,229,0.5), transparent),
+    radial-gradient(ellipse 50% 16% at 45% 75%, rgba(99,60,200,0.45), transparent);
+  filter: blur(24px);
+  animation: ribbonFlow 11s ease-in-out infinite alternate;
+}
+@keyframes ribbonFlow {
+  0%   { transform: translateX(-14%) rotate(0deg); }
+  50%  { transform: translateX(14%) rotate(5deg); }
+  100% { transform: translateX(-8%) rotate(-3deg); }
+}
+
+/* Feixes de luz — barras diagonais claras varrendo um fundo cinza-escuro,
+   como luz de palco cortando neblina. */
+.bg-preset-feixes-de-luz { background: #14161a; overflow: hidden; }
+.bg-preset-feixes-de-luz::after {
+  content: "";
+  position: absolute;
+  inset: -30%;
+  background: repeating-linear-gradient(75deg, rgba(255,255,255,0.16) 0px, rgba(255,255,255,0.16) 2px, transparent 2px, transparent 70px);
+  filter: blur(2px);
+  animation: beamSweep 8s ease-in-out infinite alternate;
+}
+@keyframes beamSweep {
+  0%   { transform: translateX(-18%); opacity: 0.35; }
+  50%  { transform: translateX(18%); opacity: 0.95; }
+  100% { transform: translateX(-10%); opacity: 0.5; }
+}
+
+/* Raios celestiais — feixes finos e frios caindo do topo, como luz do sol
+   atravessando neblina numa sala escura. */
+.bg-preset-raios-celestiais {
+  background: radial-gradient(ellipse at 50% 0%, #1c2b3a 0%, #05070a 70%);
+  overflow: hidden;
+}
+.bg-preset-raios-celestiais::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background: repeating-linear-gradient(12deg, rgba(200,220,255,0.22) 0px, rgba(200,220,255,0.22) 3px, transparent 3px, transparent 90px);
+  animation: godRayPulse 6s ease-in-out infinite;
+}
+@keyframes godRayPulse {
+  0%, 100% { opacity: 0.3; transform: translateX(-6%); }
+  50%      { opacity: 1; transform: translateX(6%); }
+}
+
+/* Galáxia — nebulosa girando bem devagar por trás de um céu estrelado
+   (reaproveita starTwinkle e rotateSlow). */
+.bg-preset-galaxia { background: #05040a; overflow: hidden; }
+.bg-preset-galaxia::before {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  background: conic-gradient(from 90deg at 50% 50%, #05040a, #2e1065, #4c1d95, #05040a);
+  filter: blur(40px);
+  opacity: 0.9;
+  animation: rotateMedium 22s linear infinite;
+}
+@keyframes rotateMedium {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.bg-preset-galaxia::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1.5px 1.5px at 20% 30%, #fff, transparent),
+    radial-gradient(1px 1px at 70% 20%, #fff, transparent),
+    radial-gradient(1.5px 1.5px at 40% 70%, #fff, transparent),
+    radial-gradient(1px 1px at 85% 60%, #fff, transparent),
+    radial-gradient(1.5px 1.5px at 55% 90%, #fff, transparent),
+    radial-gradient(1px 1px at 10% 80%, #fff, transparent);
+  animation: starTwinkle 7s ease-in-out infinite;
+}
+
+/* Nuvens do poente / Nuvens da alva — silhuetas desfocadas à deriva sobre
+   um gradiente de céu (reaproveita sunsetDrift pro fundo). */
+.bg-preset-nuvens-poente {
+  background: linear-gradient(160deg, #2d1b2e, #7c2d12, #c2410c, #78350f);
+  background-size: 100% 220%;
+  animation: sunsetDrift 14s ease-in-out infinite;
+  overflow: hidden;
+}
+.bg-preset-nuvens-poente::after,
+.bg-preset-nuvens-alva::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background-image:
+    radial-gradient(ellipse 40% 12% at 30% 60%, rgba(0,0,0,0.35), transparent),
+    radial-gradient(ellipse 35% 10% at 65% 45%, rgba(0,0,0,0.3), transparent),
+    radial-gradient(ellipse 45% 14% at 50% 75%, rgba(0,0,0,0.25), transparent);
+  filter: blur(20px);
+  animation: cloudDrift 16s ease-in-out infinite;
+}
+@keyframes cloudDrift {
+  0%   { transform: translateX(-14%); }
+  50%  { transform: translateX(14%); }
+  100% { transform: translateX(-14%); }
+}
+
+.bg-preset-nuvens-alva {
+  background: linear-gradient(160deg, #1e1b3a, #4c1d95, #a21caf, #db2777);
+  background-size: 100% 220%;
+  animation: sunsetDrift 14s ease-in-out infinite;
+  overflow: hidden;
+}
+.bg-preset-nuvens-alva::after {
+  animation: cloudDrift 18s ease-in-out infinite reverse;
+}
+
 /* ─── Typography ─────────────────────────────────────── */
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
@@ -745,9 +925,17 @@ textarea.input-field {
 .toolbar-connections {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
   padding: 0 4px;
   flex-shrink: 0;
+}
+.conn-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 .conn-dot {
   width: 6px;

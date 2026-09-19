@@ -34,6 +34,7 @@ export async function PUT(req: NextRequest) {
       doc.logoUrl = body.logoUrl ?? doc.logoUrl;
       doc.textPosition = body.textPosition ?? doc.textPosition;
       doc.countdownTextPosition = body.countdownTextPosition ?? doc.countdownTextPosition;
+      doc.lastSeenVersion = body.lastSeenVersion ?? doc.lastSeenVersion;
       return doc;
     }
   );

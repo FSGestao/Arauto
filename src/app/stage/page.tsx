@@ -27,20 +27,28 @@ interface MediaItemLike {
   title: string;
 }
 
+interface BibleReference {
+  book: string;
+  chapter: number;
+  verse: number;
+  text: string;
+}
+
 interface ServiceProgress {
   stepIndex: number;
   totalSteps: number;
-  steps: { kind: "lyrics" | "announcement" | "media"; label: string; sublabel: string; skip: boolean }[];
+  steps: { kind: "lyrics" | "announcement" | "media" | "bible"; label: string; sublabel: string; skip: boolean }[];
 }
 
 interface LiveState {
-  mode: "idle" | "lyrics" | "announcement" | "media" | "countdown";
+  mode: "idle" | "lyrics" | "announcement" | "media" | "countdown" | "bible";
   song: Song | null;
   lyricIndex: number;
   isPlaying: boolean;
   startedAt: number | null;
   announcement: Announcement | null;
   media: MediaItemLike | null;
+  bible: BibleReference | null;
   countdownEndsAt: number | null;
   countdownTitle: string | null;
   service: ServiceProgress | null;
@@ -57,6 +65,7 @@ const EMPTY_STATE: LiveState = {
   startedAt: null,
   announcement: null,
   media: null,
+  bible: null,
   countdownEndsAt: null,
   countdownTitle: null,
   service: null,
@@ -76,12 +85,15 @@ function formatCountdown(ms: number): string {
 /**
  * Stage View — monitor de confiança pra quem está no palco (músico,
  * vocalista, pregador). Diferente da tela de projeção pública: sem logo, sem
- * identidade visual da igreja, sem controles — só a linha atual (grande) e a
+ * cores/marca da igreja, sem controles — só a linha atual (grande) e a
  * próxima (menor), em alto contraste, pra ler de relance sem virar a cabeça
- * pra tela grande. Acessível pela mesma rede local, sem login, em `/stage`.
+ * pra tela grande (o nome da igreja aparece bem discreto no rodapé, só pra
+ * identificar de qual local é a tela). Acessível pela mesma rede local, sem
+ * login, em `/stage`.
  */
 export default function StagePage() {
   const [state, setState] = useState<LiveState>(EMPTY_STATE);
+  const [churchName, setChurchName] = useState("");
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -90,6 +102,16 @@ export default function StagePage() {
     return () => {
       socket.disconnect();
     };
+  }, []);
+
+  // Só o nome — sem logo nem cores, pra não virar a identidade visual que
+  // essa tela intencionalmente não tem. Serve pra quem cuida de mais de um
+  // local/tela saber de relance qual igreja é essa, sem afetar a leitura.
+  useEffect(() => {
+    fetch("/api/settings", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((s) => setChurchName(s?.name || ""))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -137,7 +159,7 @@ export default function StagePage() {
   let nextEventLabel: string | null = null;
   if (state.service) {
     const upcoming = state.service.steps.slice(state.service.stepIndex + 1).find((s) => !s.skip);
-    if (upcoming) nextEventLabel = `${upcoming.kind === "lyrics" ? "🎵" : upcoming.kind === "media" ? "🎬" : "📢"} ${upcoming.label}`;
+    if (upcoming) nextEventLabel = `${upcoming.kind === "lyrics" ? "🎵" : upcoming.kind === "media" ? "🎬" : upcoming.kind === "bible" ? "📖" : "📢"} ${upcoming.label}`;
   }
 
   return (
@@ -170,6 +192,14 @@ export default function StagePage() {
         )}
         {state.mode === "media" && state.media && (
           <p style={{ fontSize: "clamp(1.6rem, 4.5vw, 4rem)", fontWeight: 700, opacity: 0.75 }}>🎬 {state.media.title}</p>
+        )}
+        {state.mode === "bible" && state.bible && (
+          <>
+            <p style={{ fontSize: "clamp(2rem, 6vw, 5.5rem)", fontWeight: 800, lineHeight: 1.2 }}>{state.bible.text}</p>
+            <p style={{ fontSize: "clamp(1rem, 2.5vw, 1.6rem)", opacity: 0.6, marginTop: "2vh" }}>
+              {state.bible.book} {state.bible.chapter}:{state.bible.verse}
+            </p>
+          </>
         )}
         {state.mode === "countdown" && state.countdownEndsAt && (
           <>
@@ -217,6 +247,12 @@ export default function StagePage() {
             {nextLine ? nextLine.text : nextEventLabel}
           </p>
         </div>
+      )}
+
+      {churchName && (
+        <p style={{ position: "fixed", bottom: "2vh", left: 0, right: 0, textAlign: "center", fontSize: "clamp(1rem, 2vw, 1.4rem)", opacity: 0.4 }}>
+          {churchName}
+        </p>
       )}
     </div>
   );

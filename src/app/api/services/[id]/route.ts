@@ -49,6 +49,11 @@ export async function PUT(
         type: item.type,
         refId: item.refId,
         ...(item.skip ? { skip: true } : {}),
+        // Versículo não tem um id numérico numa coleção pra referenciar por
+        // `refId` (é 0) — o conteúdo vem embutido aqui, então precisa ser
+        // preservado ao salvar, senão toda reordenação/edição do roteiro
+        // perde o texto do versículo (virava "📖 (versículo)").
+        ...(item.type === "bible" && item.bible ? { bible: item.bible } : {}),
       }));
     }
     service.updatedAt = new Date().toISOString();

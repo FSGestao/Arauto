@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import type { Settings } from "../types";
 import { getAuthHeaders } from "../utils";
 import { Icon } from "./Icon";
+import type { ArautoUpdateStatus } from "../../../types/arauto-electron";
 
 /**
  * Alterna o tema do painel Admin (claro/escuro) via `data-theme` no <html>,
@@ -43,6 +44,8 @@ export function SettingsModal({
   stageUrls,
   onClose,
   onLogout,
+  onShowOnboarding,
+  onShowReleaseNotes,
   onSaved,
 }: {
   settings: Settings;
@@ -50,6 +53,8 @@ export function SettingsModal({
   stageUrls: string[];
   onClose: () => void;
   onLogout: () => void;
+  onShowOnboarding: () => void;
+  onShowReleaseNotes: () => void;
   onSaved: (s: Settings) => void;
 }) {
   const [subTab, setSubTab] = useState<SettingsTab>("appearance");
@@ -271,6 +276,15 @@ export function SettingsModal({
             <div style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
               <p style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: 6 }}>Arauto</p>
               <p>Sistema de projeção para igrejas — letras, avisos, mídia e roteiro de culto em um só painel.</p>
+              <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+                <button className="act-btn ghost" onClick={onShowOnboarding}>
+                  <Icon name="book" /> Como usar o sistema
+                </button>
+                <button className="act-btn ghost" onClick={onShowReleaseNotes}>
+                  <Icon name="bell" /> Novidades e notas de versão
+                </button>
+              </div>
+              <UpdateCard />
             </div>
           )}
         </div>
@@ -370,6 +384,93 @@ function BackupCard() {
         <p style={{ fontSize: "0.85rem", marginTop: 12, color: message.type === "success" ? "var(--success)" : "var(--danger)" }}>
           {message.text}
         </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Atualização do próprio app desktop — só existe dentro do Electron
+ * (`window.arauto`, exposto por electron/preload.js). Quem abre o painel
+ * pelo navegador em outro computador da rede não vê nada disso: não é ali
+ * que o app é instalado, então não haveria o que atualizar.
+ *
+ * O app já confere sozinho ao abrir (silencioso, só aparece se houver
+ * novidade) e baixa a atualização automaticamente assim que a encontra —
+ * este cartão serve pra checar na hora e pra dar o "reiniciar e instalar",
+ * que fica sempre manual de propósito: nunca reiniciar sozinho enquanto
+ * pode haver um culto em andamento.
+ */
+function UpdateCard() {
+  const [available, setAvailable] = useState(typeof window !== "undefined" && !!window.arauto);
+  const [version, setVersion] = useState<string | null>(null);
+  const [status, setStatus] = useState<ArautoUpdateStatus>({ state: "not-available" });
+  const [hasChecked, setHasChecked] = useState(false);
+
+  useEffect(() => {
+    if (!window.arauto) return;
+    setAvailable(true);
+    window.arauto.version().then(setVersion).catch(() => {});
+    const unsubscribe = window.arauto.onUpdateStatus((s) => {
+      setStatus(s);
+      setHasChecked(true);
+    });
+    return unsubscribe;
+  }, []);
+
+  if (!available) {
+    return (
+      <p style={{ marginTop: 16, fontSize: "0.82rem", color: "var(--text-muted)" }}>
+        Atualizações automáticas só aparecem no aplicativo instalado — você está acessando pelo navegador.
+      </p>
+    );
+  }
+
+  const checking = status.state === "checking" || status.state === "downloading";
+
+  return (
+    <div className="glass-card p-md" style={{ marginTop: 16 }}>
+      <p style={{ fontSize: "0.85rem", color: "var(--text-primary)" }}>
+        Versão instalada: <strong>{version ?? "..."}</strong>
+      </p>
+
+      {status.state === "downloaded" ? (
+        <div style={{ marginTop: 10 }}>
+          <p style={{ fontSize: "0.85rem", color: "var(--success)", marginBottom: 8 }}>
+            Atualização {status.version} baixada e pronta. Instala ao reiniciar o app.
+          </p>
+          <button className="btn btn-primary btn-sm" onClick={() => window.arauto?.installUpdate()}>
+            Reiniciar e instalar agora
+          </button>
+        </div>
+      ) : (
+        <>
+          <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              disabled={checking}
+              onClick={() => window.arauto?.checkForUpdate()}
+            >
+              {checking ? "Verificando..." : "Verificar atualizações agora"}
+            </button>
+            {status.state === "downloading" && (
+              <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Baixando... {status.percent ?? 0}%</span>
+            )}
+          </div>
+          {hasChecked && status.state === "not-available" && (
+            <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 8 }}>
+              Você já está na versão mais recente.
+            </p>
+          )}
+          {status.state === "available" && (
+            <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 8 }}>
+              Versão {status.version} encontrada — baixando...
+            </p>
+          )}
+          {status.state === "error" && (
+            <p style={{ fontSize: "0.8rem", color: "var(--danger)", marginTop: 8 }}>{status.message}</p>
+          )}
+        </>
       )}
     </div>
   );

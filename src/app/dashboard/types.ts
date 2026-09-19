@@ -16,6 +16,7 @@ export interface Settings {
   logoUrl: string | null;
   textPosition: TextPosition;
   countdownTextPosition: TextPosition;
+  lastSeenVersion?: string;
 }
 
 export interface UserInfo {
@@ -70,8 +71,59 @@ export interface MediaItem {
   source?: "upload" | "youtube";
 }
 
+/* ─── Bíblia ─────────────────────────────────────────────
+   Espelha src/lib/types.ts — ver o comentário lá sobre a licença de cada
+   tradução (a que vem com o Arauto é de domínio público; uploads são
+   responsabilidade de quem envia). */
+export interface BibleVerse {
+  number: number;
+  text: string;
+}
+
+export interface BibleChapter {
+  number: number;
+  verses: BibleVerse[];
+}
+
+export interface BibleBook {
+  name: string;
+  abbrev: string;
+  chapters: BibleChapter[];
+}
+
+export interface BibleTranslationData {
+  id: string;
+  name: string;
+  language: string;
+  license: string;
+  source: string;
+  books: BibleBook[];
+}
+
+export interface BibleTranslationMeta {
+  id: string;
+  name: string;
+  language: string;
+  license: string;
+  source: string;
+  origin: "seed" | "upload";
+  bookCount: number;
+  verseCount: number;
+  createdAt: string;
+}
+
+export interface BibleReference {
+  translationId: string;
+  translationName: string;
+  book: string;
+  bookAbbrev: string;
+  chapter: number;
+  verse: number;
+  text: string;
+}
+
 export interface StepSummary {
-  kind: "lyrics" | "announcement" | "media";
+  kind: "lyrics" | "announcement" | "media" | "bible";
   label: string;
   sublabel: string;
   skip: boolean;
@@ -86,13 +138,14 @@ export interface ServiceProgress {
 }
 
 export interface LiveState {
-  mode: "idle" | "lyrics" | "announcement" | "media" | "countdown";
+  mode: "idle" | "lyrics" | "announcement" | "media" | "countdown" | "bible";
   song: Song | null;
   lyricIndex: number;
   isPlaying: boolean;
   startedAt: number | null;
   announcement: Announcement | null;
   media: MediaItem | null;
+  bible: BibleReference | null;
   nextMedia: string | null;
   countdownEndsAt: number | null;
   countdownTitle: string | null;
@@ -109,7 +162,7 @@ export interface LiveState {
   mediaPaused: boolean;
 }
 
-export type ServiceItemType = "song" | "announcement" | "media";
+export type ServiceItemType = "song" | "announcement" | "media" | "bible";
 
 export interface ServiceItem {
   id: string;
@@ -117,6 +170,9 @@ export interface ServiceItem {
   refId: number;
   /** Desmarcado no roteiro: continua salvo no culto, mas não entra na apresentação. */
   skip?: boolean;
+  /** Só quando type === "bible" — o versículo já vem resolvido, embutido
+   *  aqui (não tem coleção própria pra referenciar por `refId`). */
+  bible?: BibleReference;
 }
 
 export interface Service {
@@ -126,4 +182,4 @@ export interface Service {
   items: ServiceItem[];
 }
 
-export type LibraryFilter = "songs" | "services" | "announcements" | "media";
+export type LibraryFilter = "songs" | "services" | "announcements" | "media" | "bible";

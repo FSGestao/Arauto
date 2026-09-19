@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import type { Announcement, Song, MediaItem, ServiceItemType, ServiceItem, Service } from "../types";
-import { getAuthHeaders } from "../utils";
+import { useMemo, useRef, useState } from "react";
+import type { Announcement, Song, MediaItem, ServiceItemType, ServiceItem, Service, BibleTranslationData, BibleReference } from "../types";
+import { getAuthHeaders, parseBibleReference } from "../utils";
 
 export function ServiceModal({ onClose, onSaved }: { onClose: () => void; onSaved: (service: Service) => void }) {
   const [title, setTitle] = useState("");
@@ -50,6 +50,8 @@ export function ServiceEditorModal({
   songs,
   announcements,
   mediaLibrary,
+  bibleData,
+  bibleTranslationId,
   onClose,
   onSaved,
 }: {
@@ -57,16 +59,59 @@ export function ServiceEditorModal({
   songs: Song[];
   announcements: Announcement[];
   mediaLibrary: MediaItem[];
+  bibleData: BibleTranslationData | null;
+  bibleTranslationId: string | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [items, setItems] = useState<ServiceItem[]>(service.items);
   const [saving, setSaving] = useState(false);
   const [picker, setPicker] = useState<ServiceItemType | null>(null);
+  const [bibleQuery, setBibleQuery] = useState("");
+  // Tirar um item exige clicar duas vezes (o botão vira "Remover?" por 3s) —
+  // um "×" pequeno sozinho ao lado de "↑"/"↓" é fácil de acertar sem querer.
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function addItem(type: ServiceItemType, refId: number) {
-    setItems([...items, { id: crypto.randomUUID(), type, refId }]);
+  function addItem(type: ServiceItemType, refId: number, bible?: BibleReference) {
+    setItems([...items, bible ? { id: crypto.randomUUID(), type, refId, bible } : { id: crypto.randomUUID(), type, refId }]);
     setPicker(null);
+    setBibleQuery("");
+  }
+
+  function handleRemoveClick(id: string) {
+    if (confirmRemoveId === id) {
+      if (confirmTimer.current) clearTimeout(confirmTimer.current);
+      setConfirmRemoveId(null);
+      removeItem(id);
+      return;
+    }
+    setConfirmRemoveId(id);
+    if (confirmTimer.current) clearTimeout(confirmTimer.current);
+    confirmTimer.current = setTimeout(() => setConfirmRemoveId(null), 3000);
+  }
+
+  const bibleResults = useMemo(() => {
+    if (!bibleData || !bibleTranslationId || bibleQuery.trim().length < 2) return [];
+    const ref = parseBibleReference(bibleQuery, bibleData.books);
+    if (!ref) return [];
+    const chapter = ref.book.chapters.find((c) => c.number === ref.chapter);
+    const verses = ref.verse ? chapter?.verses.filter((v) => v.number === ref.verse) ?? [] : chapter?.verses ?? [];
+    return verses.map((verse) => ({ book: ref.book, chapter: ref.chapter, verse })).slice(0, 60);
+  }, [bibleQuery, bibleData, bibleTranslationId]);
+
+  function addBibleVerse(book: { name: string; abbrev: string }, chapterNumber: number, verse: { number: number; text: string }) {
+    if (!bibleData || !bibleTranslationId) return;
+    const ref: BibleReference = {
+      translationId: bibleTranslationId,
+      translationName: bibleData.name,
+      book: book.name,
+      bookAbbrev: book.abbrev,
+      chapter: chapterNumber,
+      verse: verse.number,
+      text: verse.text,
+    };
+    addItem("bible", 0, ref);
   }
   function removeItem(id: string) {
     setItems(items.filter((i) => i.id !== id));
@@ -99,6 +144,9 @@ export function ServiceEditorModal({
       const m = mediaLibrary.find((x) => x.id === item.refId);
       return m ? `🎬 ${m.title}` : "🎬 (mídia removida)";
     }
+    if (item.type === "bible") {
+      return item.bible ? `📖 ${item.bible.book} ${item.bible.chapter}:${item.bible.verse}` : "📖 (versículo)";
+    }
     const a = announcements.find((x) => x.id === item.refId);
     return a ? `📢 ${a.title}` : "📢 (aviso removido)";
   }
@@ -120,7 +168,14 @@ export function ServiceEditorModal({
                 <span style={{ flex: 1, fontSize: "0.9rem" }}>{labelFor(item)}</span>
                 <button className="btn btn-secondary btn-sm btn-icon" style={{ width: 32, height: 32 }} onClick={() => moveItem(i, -1)} disabled={i === 0}>↑</button>
                 <button className="btn btn-secondary btn-sm btn-icon" style={{ width: 32, height: 32 }} onClick={() => moveItem(i, 1)} disabled={i === items.length - 1}>↓</button>
-                <button className="btn btn-danger btn-sm btn-icon" style={{ width: 32, height: 32 }} onClick={() => removeItem(item.id)}>×</button>
+                <button
+                  className="btn btn-danger btn-sm btn-icon"
+                  style={confirmRemoveId === item.id ? { width: "auto", height: 32, padding: "0 8px", fontSize: "0.72rem" } : { width: 32, height: 32 }}
+                  title={confirmRemoveId === item.id ? "Clique de novo para confirmar" : "Tirar do roteiro"}
+                  onClick={() => handleRemoveClick(item.id)}
+                >
+                  {confirmRemoveId === item.id ? "Remover?" : "×"}
+                </button>
               </div>
             ))
           )}
@@ -135,6 +190,9 @@ export function ServiceEditorModal({
           </button>
           <button className="btn btn-secondary btn-sm" onClick={() => setPicker(picker === "media" ? null : "media")}>
             + Adicionar Mídia
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setPicker(picker === "bible" ? null : "bible")}>
+            + Adicionar Versículo
           </button>
         </div>
 
@@ -166,6 +224,44 @@ export function ServiceEditorModal({
                   <span>🎵 {s.title}</span>
                 </button>
               ))
+            )}
+          </div>
+        )}
+
+        {picker === "bible" && (
+          <div className="glass-card p-md mb-lg">
+            {!bibleData || !bibleTranslationId ? (
+              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                Escolha uma tradução no filtro Bíblia primeiro.
+              </p>
+            ) : (
+              <>
+                <input
+                  className="input-field"
+                  autoFocus
+                  value={bibleQuery}
+                  onChange={(e) => setBibleQuery(e.target.value)}
+                  placeholder="Ex: jo 3:16, salmos 23..."
+                  style={{ marginBottom: 10 }}
+                />
+                <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                  {bibleQuery.trim().length >= 2 && bibleResults.length === 0 && (
+                    <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Nenhum versículo encontrado.</p>
+                  )}
+                  {bibleResults.map((r) => (
+                    <button
+                      key={`${r.book.abbrev}-${r.chapter}-${r.verse.number}`}
+                      className="sidebar-link"
+                      style={{ textAlign: "left", alignItems: "flex-start" }}
+                      onClick={() => addBibleVerse(r.book, r.chapter, r.verse)}
+                    >
+                      <span>
+                        📖 <strong>{r.book.name} {r.chapter}:{r.verse.number}</strong> — {r.verse.text}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}

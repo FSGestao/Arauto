@@ -1,0 +1,23 @@
+{
+  "version": "1.2.0",
+  "date": "2026-09-19",
+  "title": "Bíblia, fundos animados, atualização automática e várias melhorias",
+  "status": "draft",
+  "items": [
+    "Novo: aba Bíblia — busque um versículo digitando algo como \"jo 3:16\" ou \"salmos 23\", leia por capítulo e adicione ao roteiro do culto com um clique.",
+    "Você pode importar outras traduções da Bíblia (JSON, XML ou CSV) além das que já vêm instaladas.",
+    "Versículos agora fazem parte do roteiro do culto, junto com músicas e avisos — inclusive no editor de roteiro.",
+    "Adicionar música manualmente (sem YouTube) ficou mais fácil, com uma aba própria no cadastro.",
+    "Letras de música sem tempo automático agora podem ser editadas manualmente (início e fim de cada linha).",
+    "Novo: Timer de palco — um cronômetro que só aparece na Stage View, independente do que está sendo projetado.",
+    "A contagem regressiva agora aceita vídeo do YouTube como fundo, além de imagem ou vídeo enviado do computador.",
+    "Novos fundos animados prontos para a tela de projeção (poeira dourada, feixes de luz, galáxia e outros).",
+    "O painel agora avisa quando o culto está no ar mas a Stage View não foi aberta.",
+    "Atalhos de teclado: seta direita ou espaço avança o roteiro, seta esquerda volta.",
+    "A aba Cultos agora mostra o roteiro do culto selecionado direto na tela, sem precisar abrir \"Editar\".",
+    "Remover um item do roteiro agora pede uma confirmação rápida, pra evitar tirar algo sem querer.",
+    "Corrigido: em alguns casos, reordenar ou salvar o roteiro apagava o texto de um versículo já adicionado.",
+    "O app agora verifica e baixa atualizações sozinho — você só precisa confirmar quando quiser instalar.",
+    "Novo: um resumo de \"como usar\" aparece na primeira vez que o painel é aberto, e pode ser revisto a qualquer momento em Configurações."
+  ]
+}
