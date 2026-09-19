@@ -1,6 +1,8 @@
 {
   "name": "arauto-app",
   "version": "1.2.0",
+  "description": "Sistema de projeção para igrejas — letras, avisos, mídia, Bíblia e roteiro de culto em um só painel.",
+  "author": "FSGestao",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
