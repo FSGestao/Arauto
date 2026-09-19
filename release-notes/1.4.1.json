@@ -1,0 +1,9 @@
+{
+  "version": "1.4.1",
+  "date": "2026-09-19",
+  "title": "Correção no envio do Fale conosco",
+  "status": "approved",
+  "items": [
+    "Corrigido: o \"Fale conosco\" (Configurações > Sobre), lançado na v1.4.0, ainda não estava configurado de verdade — as mensagens não chegavam a lugar nenhum. Agora o envio funciona."
+  ]
+}

@@ -482,11 +482,8 @@ function UpdateCard() {
   );
 }
 
-// Mesmo endpoint usado na landing page (landing/index.html) — trocar
-// "SEU_FORM_ID" pelo endpoint real do Formspree (https://formspree.io) nos
-// dois lugares assim que a conta for criada. Até lá, o formulário aparece
-// normalmente mas o envio falha (ver mensagem de erro abaixo).
-const FORMSPREE_ENDPOINT = "https://formspree.io/f/SEU_FORM_ID";
+// Mesmo endpoint usado na landing page (landing/index.html).
+const FORMSPREE_ENDPOINT = "https://formspree.io/f/mljdgddb";
 
 /**
  * "Fale conosco" — pra dúvida, sugestão ou algo que quebrou chegar direto
