@@ -2,7 +2,7 @@
   "version": "1.2.0",
   "date": "2026-09-19",
   "title": "Bíblia, fundos animados, atualização automática e várias melhorias",
-  "status": "draft",
+  "status": "approved",
   "items": [
     "Novo: aba Bíblia — busque um versículo digitando algo como \"jo 3:16\" ou \"salmos 23\", leia por capítulo e adicione ao roteiro do culto com um clique.",
     "Você pode importar outras traduções da Bíblia (JSON, XML ou CSV) além das que já vêm instaladas.",
