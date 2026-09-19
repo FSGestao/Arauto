@@ -674,6 +674,15 @@ input[type="range"].slider::-moz-range-thumb {
   box-shadow: 0 0 0 3px rgba(108, 58, 237, 0.15);
 }
 
+/* O <select> em si herda o fundo translúcido do .input-field normalmente,
+   mas a lista de opções é renderizada pelo navegador fora da nossa árvore
+   de estilo — cores translúcidas (--overlay-*) viram quase-branco nela.
+   Precisa de cor sólida explícita nas <option> pra não ficar ilegível. */
+select.input-field option {
+  background: var(--bg-deep);
+  color: var(--text-primary);
+}
+
 .input-label {
   display: block;
   margin-bottom: 6px;
@@ -978,26 +987,31 @@ textarea.input-field {
   position: relative;
   flex: 1;
   min-width: 0;
+  /* Teto de largura pra não ficar maior nas abas sem coluna de detalhe
+     (Avisos, Mídia — layout "single", header ocupa a largura toda) do que
+     nas abas com detalhe (Letras, Bíblia, Cultos — header preso à coluna
+     de 420px). Sem isso, o mesmo campo parecia "dois tamanhos". */
+  max-width: 480px;
 }
 .library-filter svg {
   position: absolute;
-  left: 12px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   color: var(--text-muted);
   pointer-events: none;
 }
 .library-filter input {
   width: 100%;
-  padding: 9px 12px 9px 36px;
+  padding: 11px 14px 11px 40px;
   border-radius: 10px;
   border: 1px solid var(--border-glass);
   background: var(--overlay-3);
   color: var(--text-primary);
   font-family: var(--font-body);
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   outline: none;
 }
 .library-filter input::placeholder { color: var(--text-muted); }
@@ -1016,7 +1030,13 @@ textarea.input-field {
 }
 .library-split.single { grid-template-columns: minmax(0, 1fr); }
 
-.library-header { grid-column: 1; grid-row: 1; }
+/* Cabeçalho (busca + ações) sempre na largura total do card, mesmo nas
+   abas com coluna de detalhe (Letras, Bíblia, Cultos) — sem isso, ficava
+   preso à coluna da lista (420px) e a busca ficava espremida (pior ainda
+   na Bíblia, que soma tradução + botão de importar ao lado). Mesmo
+   tamanho de campo em todas as abas, com os botões à direita, como em
+   Avisos/Mídia (que já usam a largura toda por não terem detalhe). */
+.library-header { grid-column: 1 / -1; grid-row: 1; }
 .library-list   { grid-column: 1; grid-row: 2; }
 .library-detail { grid-column: 2; grid-row: 2; }
 
@@ -1568,6 +1588,200 @@ textarea.input-field {
 .settings-modal-body {
   padding: 24px;
   overflow-y: auto;
+}
+
+/* ─── Manual de Uso (help modal, sidebar + content) ────
+   Mesma linguagem visual do resto do painel: .panel para cada tarefa
+   (cabeçalho + corpo, como as zonas de trabalho do cockpit) e .field-label
+   para os rótulos "Quando usar" / "Passo a passo" etc., em vez de <strong>
+   solto — consistente com como o painel já rotula campos em toda parte. */
+.manual-modal {
+  background-color: var(--bg-deep);
+  background-image: linear-gradient(var(--overlay-3), var(--overlay-3));
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-xl);
+  width: 100%;
+  max-width: 1080px;
+  height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.manual-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border-glass);
+  flex-shrink: 0;
+}
+.manual-head-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(108, 58, 237, 0.28), rgba(139, 92, 246, 0.14));
+  color: var(--primary-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.manual-head h2 { font-size: 1.05rem; margin: 0; }
+.manual-head p { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+.manual-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.manual-nav {
+  width: 248px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-glass);
+  background: var(--overlay-1);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+.manual-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.83rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.manual-nav-btn svg { flex-shrink: 0; opacity: 0.8; }
+.manual-nav-btn:hover { background: var(--overlay-4); color: var(--text-primary); }
+.manual-nav-btn.active {
+  background: linear-gradient(135deg, rgba(108, 58, 237, 0.22), rgba(139, 92, 246, 0.1));
+  color: var(--primary-light);
+  font-weight: 600;
+}
+.manual-nav-btn.active svg { opacity: 1; }
+.manual-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px;
+}
+.manual-content-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.manual-content-head h3 { font-size: 1.2rem; margin: 0; }
+.manual-content-count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.manual-content-intro {
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 22px;
+  max-width: 640px;
+}
+.manual-task {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.manual-task + .manual-task { margin-top: 16px; }
+.manual-task-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 0.94rem;
+  color: var(--text-primary);
+  padding: 13px 18px;
+  background: var(--overlay-2);
+  border-bottom: 1px solid var(--border-glass);
+}
+.manual-task-title .manual-task-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--overlay-6);
+  color: var(--primary-light);
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.manual-task-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.manual-task-field p {
+  font-size: 0.87rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+.manual-task-steps {
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.manual-task-steps li {
+  font-size: 0.87rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  padding-left: 2px;
+}
+.manual-task-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  font-size: 0.83rem;
+  line-height: 1.5;
+}
+.manual-task-note.tip {
+  background: rgba(108, 58, 237, 0.1);
+  border: 1px solid rgba(108, 58, 237, 0.25);
+  color: var(--text-secondary);
+}
+.manual-task-note.tip svg { color: var(--primary-light); }
+.manual-task-note.issue {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  color: var(--text-secondary);
+}
+.manual-task-note.issue svg { color: var(--warning); }
+.manual-task-note svg { flex-shrink: 0; margin-top: 1px; }
+
+@media (max-width: 780px) {
+  .manual-modal { height: 92vh; max-width: 100%; }
+  .manual-body { flex-direction: column; }
+  .manual-nav { width: 100%; flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--border-glass); }
+  .manual-content { padding: 20px; }
 }
 
 /* ─── Roteiro column (right) ─────────────────────────── */

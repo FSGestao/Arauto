@@ -1,0 +1,13 @@
+{
+  "version": "1.3.0",
+  "date": "2026-09-19",
+  "title": "Manual completo no sistema e correções de áudio e visual",
+  "status": "approved",
+  "items": [
+    "Novo: Manual completo de uso, direto no sistema (Configurações > Sobre > \"Manual completo\") — cobre cada tarefa (roteiros, canções, versículos, avisos, mídia, apresentação, Stage View, contagem regressiva, busca, configurações e atualizações), com passo a passo.",
+    "Corrigido: vídeo do YouTube usado como fundo da contagem regressiva não tocava com som.",
+    "Corrigido: dropdown de seleção (ex.: escolher imagem/vídeo na contagem regressiva) ficava ilegível no tema escuro.",
+    "Corrigido: campo de busca da aba Bíblia ficava espremido, menor que o das outras abas — agora todas as abas têm o mesmo tamanho de busca, com os botões alinhados à direita.",
+    "Ajuste: seletor de tradução e botão \"Importar Bíblia\" passaram para o lado do campo de busca, em vez de abaixo."
+  ]
+}

@@ -33,6 +33,7 @@ import { AnnouncementModal, TemplateModal, UseTemplateModal } from "./components
 import { ServiceModal, ServiceEditorModal } from "./components/ServiceModals";
 import { SettingsModal } from "./components/SettingsModal";
 import { OnboardingModal, ReleaseNotesModal, type ReleaseNoteEntry } from "./components/HelpModals";
+import { ManualModal } from "./components/ManualModal";
 import { BibleUploadModal } from "./components/BibleModals";
 
 export default function DashboardPage() {
@@ -52,6 +53,7 @@ export default function DashboardPage() {
   // que essa instalação já viu (settings.lastSeenVersion).
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showReleaseNotes, setShowReleaseNotes] = useState(false);
+  const [showManual, setShowManual] = useState(false);
   const [releaseNotesEntries, setReleaseNotesEntries] = useState<ReleaseNoteEntry[]>([]);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   // Bíblia: a lista só tem metadados (nome/licença/contagem) — o texto
@@ -225,6 +227,9 @@ export default function DashboardPage() {
   // inteiro, não só o que faltava ver.
   function openOnboarding() {
     setShowOnboarding(true);
+  }
+  function openManual() {
+    setShowManual(true);
   }
   function openReleaseNotesHistory() {
     fetch("/api/release-notes")
@@ -915,7 +920,7 @@ export default function DashboardPage() {
           <section className="cockpit-card cockpit-library">
             <div className={`library-split ${filter === "songs" || filter === "bible" || filter === "services" ? "" : "single"}`}>
               <div className="library-header">
-                <div className="library-filter" style={filter === "bible" ? { flexBasis: "100%" } : undefined}>
+                <div className="library-filter">
                 <Icon name="search" />
                 <input
                   type="text"
@@ -990,7 +995,7 @@ export default function DashboardPage() {
                   quem enviou uma própria: a responsabilidade pelos direitos
                   de uso é de quem fez o upload, o Arauto não valida isso. */}
               {filter === "bible" && bibleTranslationId && (
-                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "-6px 0 12px" }}>
+                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "8px 0 12px" }}>
                   Licença: {bibleTranslations.find((t) => t.id === bibleTranslationId)?.license}
                 </p>
               )}
@@ -2135,6 +2140,7 @@ export default function DashboardPage() {
           onLogout={handleLogout}
           onShowOnboarding={openOnboarding}
           onShowReleaseNotes={openReleaseNotesHistory}
+          onShowManual={openManual}
           onSaved={(s) => {
             setSettings(s);
             // Avisa as telas já abertas (projeção, stage): elas carregaram as
@@ -2144,6 +2150,9 @@ export default function DashboardPage() {
           }}
         />
       )}
+
+      {/* ─── Manual completo (sob demanda, em Configurações > Sobre) ──── */}
+      {showManual && <ManualModal onClose={() => setShowManual(false)} />}
 
       {/* ─── "Como usar" (primeira vez ou sob demanda) ──── */}
       {showOnboarding && (

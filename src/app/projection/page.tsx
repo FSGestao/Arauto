@@ -187,6 +187,12 @@ export default function ProjectionPage() {
   const ytPlayerRef = useRef<YTPlayer | null>(null);
   const ytContainerRef = useRef<HTMLDivElement | null>(null);
   const fadeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Cartaz da contagem regressiva quando é vídeo do YouTube: player próprio,
+  // separado do de mídia acima — os dois modos são mutuamente exclusivos,
+  // mas cada um pode estar montando/destruindo o seu independentemente.
+  const ytCountdownPlayerRef = useRef<YTPlayer | null>(null);
+  const ytCountdownContainerRef = useRef<HTMLDivElement | null>(null);
+  const countdownFadeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Chave do item de mídia que falhou ao carregar (arquivo corrompido/sumiu
   // do disco). Sem isso, um arquivo quebrado deixava a tela em branco sem
   // explicação — exatamente o "branco na tela" que mais assusta o operador.
@@ -380,6 +386,62 @@ export default function ProjectionPage() {
     else el.play().catch(() => {});
   }, [state.mediaPaused, mediaId]);
 
+  // ─── Cartaz da contagem regressiva em vídeo do YouTube: antes entrava
+  //     como <iframe src="...&mute=1"> estático — sempre mudo, sem jeito de
+  //     ouvir. Agora usa o mesmo player com API (volume real, fade-in) que o
+  //     modo Mídia já usa, só que a mídia é decorativa (sem pausa/onEnded).
+  const isCountdownYoutube = state.mode === "countdown" && state.countdownMediaKind === "video" && state.countdownMediaSource === "youtube";
+  const countdownMediaFile = state.countdownMediaFile;
+  useEffect(() => {
+    if (!isCountdownYoutube || !countdownMediaFile) return;
+    let destruido = false;
+    let player: YTPlayer | null = null;
+    loadYouTubeApi().then(() => {
+      if (destruido || !ytCountdownContainerRef.current || !window.YT) return;
+      player = new window.YT.Player(ytCountdownContainerRef.current, {
+        videoId: countdownMediaFile,
+        playerVars: {
+          autoplay: 1, controls: 0, disablekb: 1, modestbranding: 1,
+          rel: 0, playsinline: 1, mute: 0,
+          loop: 1, playlist: countdownMediaFile,
+        },
+        events: {
+          onReady: () => {
+            player!.setVolume(0);
+            ytCountdownPlayerRef.current = player;
+            if (countdownFadeTimerRef.current) clearInterval(countdownFadeTimerRef.current);
+            const stepMs = 30;
+            const steps = Math.max(1, Math.round(FADE_MS / stepMs));
+            let i = 0;
+            countdownFadeTimerRef.current = setInterval(() => {
+              i++;
+              if (!ytCountdownPlayerRef.current) {
+                if (countdownFadeTimerRef.current) clearInterval(countdownFadeTimerRef.current);
+                return;
+              }
+              ytCountdownPlayerRef.current.setVolume(Math.min(100, (state.volume * 100 * i) / steps));
+              if (i >= steps && countdownFadeTimerRef.current) clearInterval(countdownFadeTimerRef.current);
+            }, stepMs);
+          },
+          onError: () => setBrokenKey(`countdown-${countdownMediaFile}`),
+        },
+      });
+    });
+    return () => {
+      destruido = true;
+      if (countdownFadeTimerRef.current) clearInterval(countdownFadeTimerRef.current);
+      try { player?.destroy(); } catch {}
+      ytCountdownPlayerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countdownMediaFile, isCountdownYoutube]);
+
+  // Ajuste de volume do cartaz da contagem durante a exibição (slider mestre).
+  useEffect(() => {
+    if (!isCountdownYoutube || !ytCountdownPlayerRef.current) return;
+    ytCountdownPlayerRef.current.setVolume(state.volume * 100);
+  }, [state.volume, isCountdownYoutube]);
+
   // ─── Relata progresso pro painel do operador ──────────
   useEffect(() => {
     if (state.mode !== "media") return;
@@ -528,15 +590,14 @@ export default function ProjectionPage() {
         {state.mode === "countdown" && state.countdownEndsAt && state.countdownMediaFile && (
           /* Cartaz/vídeo do evento atrás do relógio — mesma ideia do vídeo de
              fundo, mas específico da contagem (não fica quando ela termina).
-             Vídeo do YouTube não tem um arquivo local pra usar em <video>,
-             então entra como <iframe> mudo/em loop, só decorativo (sem
-             controles — os controles de play/pausa são só pro modo Mídia). */
+             Vídeo do YouTube não tem um arquivo local pra usar em <video>, e
+             usa o player com API (ver efeito ytCountdownPlayerRef acima) pra
+             ter volume de verdade, com fade-in — sem controles, só o som. */
           brokenKey === `countdown-${state.countdownMediaFile}` ? null : state.countdownMediaKind === "video" && state.countdownMediaSource === "youtube" ? (
-            <iframe
+            <div
               key={`countdown-${state.countdownMediaFile}`}
-              src={`https://www.youtube.com/embed/${state.countdownMediaFile}?autoplay=1&mute=1&controls=0&loop=1&playlist=${state.countdownMediaFile}&modestbranding=1&rel=0&disablekb=1&iv_load_policy=3`}
-              allow="autoplay; encrypted-media"
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0, objectFit: "cover", zIndex: 0, pointerEvents: "none" }}
+              ref={ytCountdownContainerRef}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", background: "#000", pointerEvents: "none" }}
             />
           ) : state.countdownMediaKind === "video" ? (
             <video

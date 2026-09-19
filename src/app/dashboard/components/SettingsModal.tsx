@@ -46,6 +46,7 @@ export function SettingsModal({
   onLogout,
   onShowOnboarding,
   onShowReleaseNotes,
+  onShowManual,
   onSaved,
 }: {
   settings: Settings;
@@ -55,6 +56,7 @@ export function SettingsModal({
   onLogout: () => void;
   onShowOnboarding: () => void;
   onShowReleaseNotes: () => void;
+  onShowManual: () => void;
   onSaved: (s: Settings) => void;
 }) {
   const [subTab, setSubTab] = useState<SettingsTab>("appearance");
@@ -279,6 +281,9 @@ export function SettingsModal({
               <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
                 <button className="act-btn ghost" onClick={onShowOnboarding}>
                   <Icon name="book" /> Como usar o sistema
+                </button>
+                <button className="act-btn ghost" onClick={onShowManual}>
+                  <Icon name="checklist" /> Manual completo
                 </button>
                 <button className="act-btn ghost" onClick={onShowReleaseNotes}>
                   <Icon name="bell" /> Novidades e notas de versão
