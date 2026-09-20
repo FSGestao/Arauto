@@ -1,0 +1,11 @@
+{
+  "version": "1.5.0",
+  "date": "2026-09-20",
+  "title": "Guia de configuração inicial no painel",
+  "status": "approved",
+  "items": [
+    "Novo: um guia de configuração inicial com 10 passos que cobrem as principais funções do Arauto (nomear a igreja, cores da projeção, música com letra, aviso, mídia, versículo, roteiro, Projeção, Stage View e timer). Cada passo se marca como concluído sozinho, ao ser realmente feito.",
+    "O guia mora numa gaveta lateral aberta por um botão na barra superior — nunca cobre o painel, e some por completo para quem preferir dispensá-lo.",
+    "Corrigido: a checagem de \"cores personalizadas\" podia acender mesmo sem nenhuma mudança real, por causa de uma diferença de maiúsculas/minúsculas nos códigos de cor."
+  ]
+}

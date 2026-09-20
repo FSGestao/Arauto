@@ -42,6 +42,7 @@ export function SettingsModal({
   settings,
   networkUrls,
   stageUrls,
+  initialTab = "appearance",
   onClose,
   onLogout,
   onShowOnboarding,
@@ -52,6 +53,7 @@ export function SettingsModal({
   settings: Settings;
   networkUrls: string[];
   stageUrls: string[];
+  initialTab?: SettingsTab;
   onClose: () => void;
   onLogout: () => void;
   onShowOnboarding: () => void;
@@ -59,7 +61,7 @@ export function SettingsModal({
   onShowManual: () => void;
   onSaved: (s: Settings) => void;
 }) {
-  const [subTab, setSubTab] = useState<SettingsTab>("appearance");
+  const [subTab, setSubTab] = useState<SettingsTab>(initialTab);
   const [name, setName] = useState(settings.name);
   const [primaryColor, setPrimaryColor] = useState(settings.primaryColor);
   const [secondaryColor, setSecondaryColor] = useState(settings.secondaryColor);

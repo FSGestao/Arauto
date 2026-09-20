@@ -34,6 +34,8 @@ import { ServiceModal, ServiceEditorModal } from "./components/ServiceModals";
 import { SettingsModal } from "./components/SettingsModal";
 import { OnboardingModal, ReleaseNotesModal, type ReleaseNoteEntry } from "./components/HelpModals";
 import { ManualModal } from "./components/ManualModal";
+import { SetupChecklist } from "./components/SetupChecklist";
+import { SETUP_FLAG, markSetupFlag } from "./setupProgress";
 import { BibleUploadModal } from "./components/BibleModals";
 
 export default function DashboardPage() {
@@ -41,6 +43,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<LibraryFilter>("songs");
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  // Em qual aba as Configurações abrem — o checklist de configuração inicial
+  // manda direto pra aba certa de cada passo, em vez de largar a pessoa na
+  // primeira aba pra procurar sozinha.
+  const [settingsInitialTab, setSettingsInitialTab] = useState<"appearance" | "screens" | "backup" | "account" | "about">("appearance");
 
   // Data
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -456,6 +462,7 @@ export default function DashboardPage() {
   ) {
     if (!(seconds > 0)) return;
     socketRef.current?.emit("admin:startCountdown", { seconds, title, mediaFile, mediaKind, mediaSource });
+    markSetupFlag(SETUP_FLAG.timer);
   }
   function stopCountdown() {
     socketRef.current?.emit("admin:stopCountdown");
@@ -477,7 +484,9 @@ export default function DashboardPage() {
 
   function selectBibleVerse(book: BibleBook, chapterNumber: number, verse: BibleVerse) {
     const ref = buildBibleReference(book, chapterNumber, verse);
-    if (ref) socketRef.current?.emit("admin:selectBibleVerse", ref);
+    if (!ref) return;
+    socketRef.current?.emit("admin:selectBibleVerse", ref);
+    markSetupFlag(SETUP_FLAG.bible);
   }
 
   // Versículo como item do roteiro — mesmo formato de "Adicionar ao Roteiro"
@@ -499,6 +508,7 @@ export default function DashboardPage() {
     if (live.service && live.service.id === activeService.id) {
       socketRef.current?.emit("admin:appendStep", { kind: "bible", bible: ref });
     }
+    markSetupFlag(SETUP_FLAG.bible);
   }
 
   async function deleteBibleTranslation(id: string) {
@@ -516,6 +526,7 @@ export default function DashboardPage() {
   // ─── Cronômetro de palco (só aparece em /stage) ────────
   function startStageTimer(label: string) {
     socketRef.current?.emit("admin:startStageTimer", label);
+    markSetupFlag(SETUP_FLAG.timer);
   }
   function stopStageTimer() {
     socketRef.current?.emit("admin:stopStageTimer");
@@ -895,6 +906,57 @@ export default function DashboardPage() {
           </div>
 
           <div className="toolbar-actions">
+            {/* Guia dos primeiros dias: botão discreto aqui, gaveta que
+                empurra o painel (nunca cobre) ao ser aberta. */}
+            {settings && (
+              <SetupChecklist
+                state={{
+                  churchNamed: settings.name !== "Minha Igreja",
+                  // <input type="color"> sempre devolve hex minúsculo — comparar
+                  // sem normalizar marcaria "cores customizadas" pra quem só
+                  // abriu e salvou a Aparência sem mudar nada.
+                  colorsCustomized:
+                    settings.primaryColor.toLowerCase() !== "#6c3aed" ||
+                    settings.secondaryColor.toLowerCase() !== "#8b5cf6" ||
+                    settings.bgColor.toLowerCase() !== "#0f0a1e" ||
+                    settings.textColor.toLowerCase() !== "#ffffff" ||
+                    !!settings.logoUrl,
+                  songWithLyrics: songs.some((s) => s.lyrics.length > 0),
+                  announcementCreated: announcements.length > 0,
+                  mediaUploaded: mediaLibrary.length > 0,
+                  serviceBuilt: services.some((sv) => sv.items.length > 0),
+                }}
+                projectionConnected={connections.projection > 0}
+                stageConnected={connections.stage > 0}
+                onOpenAppearance={() => {
+                  setSettingsInitialTab("appearance");
+                  setShowSettingsModal(true);
+                }}
+                onNewSong={() => {
+                  setFilter("songs");
+                  setShowSongModal(true);
+                }}
+                onNewAnnouncement={() => {
+                  setFilter("announcements");
+                  setShowAnnouncementModal(true);
+                }}
+                onNewMedia={() => {
+                  setFilter("media");
+                  setShowMediaModal(true);
+                }}
+                onOpenBible={() => setFilter("bible")}
+                onNewService={() => {
+                  setFilter("services");
+                  setShowServiceModal(true);
+                }}
+                onOpenProjection={openProjectionWindow}
+                onOpenStage={openStageWindow}
+                onOpenTimer={() => {
+                  setTimerPanelTab("countdown");
+                  setShowCountdownPanel(true);
+                }}
+              />
+            )}
             <button
               className="toolbar-icon-btn roteiro-toggle"
               onClick={() => setRoteiroOpen((v) => !v)}
@@ -2138,6 +2200,7 @@ export default function DashboardPage() {
           settings={settings}
           networkUrls={networkUrls}
           stageUrls={stageUrls}
+          initialTab={settingsInitialTab}
           onClose={() => setShowSettingsModal(false)}
           onLogout={handleLogout}
           onShowOnboarding={openOnboarding}

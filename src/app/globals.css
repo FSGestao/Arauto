@@ -780,6 +780,12 @@ textarea.input-field {
   gap: 10px;
   padding: 0 0 12px;
   position: relative;
+  /* Com a gaveta de configuração aberta, o painel encolhe em vez de ficar
+     coberto — ver .setup-drawer. */
+  transition: padding-right 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+body.setup-drawer-open .cockpit {
+  padding-right: var(--setup-drawer-w);
 }
 
 /* ─── Toolbar (top bar) ──────────────────────────────── */
@@ -1248,6 +1254,308 @@ textarea.input-field {
   margin-top: 2px;
 }
 /* Aviso de que o roteiro está pausado por um item avulso. */
+/* ─── Configuração inicial (gaveta lateral) ────────────
+   Guia dos primeiros dias. Vive fora do fluxo do painel: um botão com anel
+   de progresso na barra e uma gaveta à direita que EMPURRA o cockpit em vez
+   de flutuar por cima — nenhum passo aponta pra um lugar que a própria
+   gaveta esteja escondendo. Sem backdrop: o painel segue clicável. */
+:root {
+  --setup-drawer-w: 336px;
+}
+
+.setup-trigger {
+  /* Mesmo tamanho dos demais botões da barra (roteiro, palco, configurações)
+     — sem isso ele fica visivelmente menor que os vizinhos. */
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  border: 1px solid var(--border-glass);
+  background: var(--overlay-2);
+  color: var(--primary-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: var(--transition);
+}
+.setup-trigger:hover {
+  background: var(--overlay-5);
+  color: var(--text-primary);
+}
+.setup-trigger.active {
+  border-color: rgba(108, 58, 237, 0.55);
+  background: rgba(108, 58, 237, 0.2);
+  color: var(--text-primary);
+}
+.setup-trigger.complete { color: var(--success); }
+
+/* Anel: o progresso fica legível sem abrir nada. */
+.setup-trigger-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  fill: none;
+  stroke: var(--overlay-8);
+  stroke-width: 1.6;
+  pointer-events: none;
+}
+.setup-trigger-ring-fill {
+  stroke: var(--primary-light);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.setup-trigger.complete .setup-trigger-ring-fill { stroke: var(--success); }
+
+.setup-trigger-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(108, 58, 237, 0.45);
+}
+
+.setup-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--setup-drawer-w);
+  z-index: 140;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, rgba(108, 58, 237, 0.1), transparent 220px), var(--bg-deep);
+  border-left: 1px solid rgba(108, 58, 237, 0.3);
+  box-shadow: -18px 0 42px rgba(0, 0, 0, 0.32);
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Fechada, some do caminho de cliques e de leitores de tela. */
+  visibility: hidden;
+}
+.setup-drawer.open {
+  transform: translateX(0);
+  visibility: visible;
+}
+
+.setup-drawer-head {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-glass);
+  background: rgba(108, 58, 237, 0.07);
+}
+.setup-drawer-headline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.setup-drawer-title h2 {
+  font-size: 1rem;
+  margin-bottom: 3px;
+}
+.setup-drawer-title p {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+.setup-drawer-close {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--overlay-5);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.setup-drawer-close:hover { background: var(--overlay-8); color: var(--text-primary); }
+
+/* Medidor circular: substitui a barrinha linear — a porcentagem no meio
+   dá a leitura exata sem precisar de outra linha de texto. */
+.setup-drawer-gauge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.setup-drawer-gauge p {
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.setup-ring {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.setup-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.setup-ring-track {
+  fill: none;
+  stroke: var(--overlay-8);
+  stroke-width: 3.5;
+}
+.setup-ring-fill {
+  fill: none;
+  stroke: var(--primary-light);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.setup-drawer-head.complete .setup-ring-fill { stroke: var(--success); }
+.setup-ring-value {
+  position: relative;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.setup-drawer-next {
+  margin-top: 12px;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+.setup-drawer-next strong { color: var(--primary-light); }
+
+/* Coluna única, rolando por dentro: a gaveta tem altura de tela inteira,
+   então os 10 passos cabem sem apertar nada. */
+.setup-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 16px;
+  flex: 1;
+  overflow-y: auto;
+}
+.setup-step {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-glass);
+  background: var(--overlay-2);
+  transition: var(--transition);
+}
+.setup-step:hover { background: var(--overlay-4); border-color: var(--overlay-8); }
+.setup-step.done { opacity: 0.5; }
+.setup-step.done:hover { opacity: 0.8; }
+/* O próximo pendente é o único destacado — evita dez itens gritando junto. */
+.setup-step.next {
+  border-color: rgba(108, 58, 237, 0.45);
+  background: rgba(108, 58, 237, 0.12);
+}
+
+.setup-step-mark {
+  flex-shrink: 0;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  border: 1px solid var(--overlay-8);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.setup-step.done .setup-step-mark {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+.setup-step-icon {
+  flex-shrink: 0;
+  color: var(--primary-light);
+  display: flex;
+}
+.setup-step.done .setup-step-icon { color: var(--text-muted); }
+.setup-step-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.setup-step-text strong {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+.setup-step.done .setup-step-text strong { text-decoration: line-through; }
+.setup-step-text em {
+  font-size: 0.71rem;
+  font-style: normal;
+  color: var(--text-muted);
+  line-height: 1.25;
+}
+/* Passo concluído não precisa mais da explicação — economiza uma linha
+   inteira por item, que em 10 passos é meia tela. */
+.setup-step.done .setup-step-text em { display: none; }
+.setup-step-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(108, 58, 237, 0.45);
+  background: rgba(108, 58, 237, 0.16);
+  color: var(--primary-light);
+  font-family: var(--font-body);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+.setup-step-btn:hover { background: rgba(108, 58, 237, 0.3); color: var(--text-primary); }
+
+.setup-drawer-foot {
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--border-glass);
+}
+.setup-drawer-dismiss {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.76rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.setup-drawer-dismiss:hover { color: var(--text-secondary); }
+
+/* Em tela estreita não sobra largura pra empurrar: a gaveta ocupa quase
+   tudo e o painel fica atrás, intocado, até ela ser fechada. */
+@media (max-width: 900px) {
+  .setup-drawer { width: min(320px, 92vw); }
+  body.setup-drawer-open .cockpit { padding-right: 0; }
+}
+
 .roteiro-notice {
   display: flex;
   align-items: center;

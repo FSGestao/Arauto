@@ -5,6 +5,7 @@ import React from "react";
 /** Ícones de traço (sem emoji) — o painel inteiro usa este conjunto. */
 const ICON_PATHS: Record<string, React.ReactNode> = {
   search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>,
+  compass: <><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5z" /></>,
   lyrics: <><path d="M4 6h16" /><path d="M4 12h10" /><path d="M4 18h13" /></>,
   bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></>,
   media: <><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m10 9 5 3-5 3z" /></>,
