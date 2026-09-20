@@ -58,6 +58,15 @@ class Page {
       (r.exceptionDetails.exception?.description || ""));
     return r.result.value;
   }
+  /** Screenshot da página em PNG (buffer) — usado pelos geradores de GIF do
+   *  manual, não pela suíte de verificação. `clip` (opcional) recorta uma
+   *  região {x, y, width, height} em vez da viewport inteira. */
+  async screenshot(clip) {
+    const params = { format: "png" };
+    if (clip) params.clip = { ...clip, scale: 1 };
+    const r = await this.send("Page.captureScreenshot", params);
+    return Buffer.from(r.data, "base64");
+  }
   /** Escolhe arquivos num <input type="file"> como se fosse a janela do
    *  Windows — é o único jeito de testar upload sem um humano. */
   async setFile(selector, files) {

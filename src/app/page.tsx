@@ -100,7 +100,11 @@ export default function LoginPage() {
       <div className="login-card glass-card">
         {/* Logo / Title */}
         <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <img src="/arauto-logo.png" alt="" width={64} height={64} style={{ display: "block", margin: "0 auto 12px" }} />
+          {/* 32 pontos, o mesmo tamanho do logo na barra do painel. O único
+              arquivo de origem tem 124px: exibido em 32 ele é sempre
+              REDUZIDO (até 96px reais numa tela de densidade 3x), e por
+              isso sai nítido. Ampliado — como ficava em 64 — borrava. */}
+          <img src="/arauto-logo.png" alt="" width={32} height={32} style={{ display: "block", margin: "0 auto 10px" }} />
           <h1 className="login-title">Arauto</h1>
           <p className="login-subtitle">
             {hasUsers ? "Faça login para acessar o painel" : "Crie a conta local de administração deste computador"}

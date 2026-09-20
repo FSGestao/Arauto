@@ -48,6 +48,7 @@ export function SetupChecklist({
   state,
   projectionConnected,
   stageConnected,
+  remoteConnected,
   onOpenAppearance,
   onNewSong,
   onNewAnnouncement,
@@ -57,10 +58,13 @@ export function SetupChecklist({
   onOpenProjection,
   onOpenStage,
   onOpenTimer,
+  onOpenRemote,
+  onOpenManual,
 }: {
   state: SetupStepState;
   projectionConnected: boolean;
   stageConnected: boolean;
+  remoteConnected: boolean;
   onOpenAppearance: () => void;
   onNewSong: () => void;
   onNewAnnouncement: () => void;
@@ -70,13 +74,15 @@ export function SetupChecklist({
   onOpenProjection: () => void;
   onOpenStage: () => void;
   onOpenTimer: () => void;
+  onOpenRemote: () => void;
+  onOpenManual: () => void;
 }) {
   // Começa escondido e só aparece depois de ler o localStorage — sem isso, o
   // botão "pisca" na barra de quem já dispensou, a cada carregamento.
   const [ready, setReady] = useState(false);
   const [dismissed, setDismissed] = useState(true);
   const [open, setOpen] = useState(false);
-  const [flags, setFlags] = useState({ projection: false, stage: false, bible: false, timer: false });
+  const [flags, setFlags] = useState({ projection: false, stage: false, bible: false, timer: false, remote: false, manual: false });
 
   useEffect(() => {
     setDismissed(readSetupFlag(SETUP_FLAG.dismissed));
@@ -85,6 +91,8 @@ export function SetupChecklist({
       stage: readSetupFlag(SETUP_FLAG.stage),
       bible: readSetupFlag(SETUP_FLAG.bible),
       timer: readSetupFlag(SETUP_FLAG.timer),
+      remote: readSetupFlag(SETUP_FLAG.remote),
+      manual: readSetupFlag(SETUP_FLAG.manual),
     });
     setReady(true);
   }, []);
@@ -105,9 +113,18 @@ export function SetupChecklist({
     }
   }, [stageConnected, flags.stage]);
 
-  // Revê as marcas guardadas quando a janela volta ao foco — a Bíblia e o
-  // timer são marcados em outros pontos do painel, então o estado aqui pode
-  // estar defasado.
+  // Mesma lógica: um celular pareado de verdade (não só o botão clicado)
+  // marca o passo — igual à Projeção/Stage View.
+  useEffect(() => {
+    if (remoteConnected && !flags.remote) {
+      markSetupFlag(SETUP_FLAG.remote);
+      setFlags((f) => ({ ...f, remote: true }));
+    }
+  }, [remoteConnected, flags.remote]);
+
+  // Revê as marcas guardadas quando a janela volta ao foco — a Bíblia, o
+  // timer e o Manual são marcados em outros pontos do painel, então o
+  // estado aqui pode estar defasado.
   useEffect(() => {
     function sync() {
       setFlags({
@@ -115,6 +132,8 @@ export function SetupChecklist({
         stage: readSetupFlag(SETUP_FLAG.stage),
         bible: readSetupFlag(SETUP_FLAG.bible),
         timer: readSetupFlag(SETUP_FLAG.timer),
+        remote: readSetupFlag(SETUP_FLAG.remote),
+        manual: readSetupFlag(SETUP_FLAG.manual),
       });
     }
     window.addEventListener("focus", sync);
@@ -233,6 +252,24 @@ export function SetupChecklist({
       done: flags.timer,
       actionLabel: "Abrir timer",
       action: onOpenTimer,
+    },
+    {
+      id: "remoto",
+      icon: "phone",
+      label: "Pareie o controle remoto",
+      hint: "Controle o culto pelo celular, longe do computador",
+      done: flags.remote,
+      actionLabel: "Parear celular",
+      action: onOpenRemote,
+    },
+    {
+      id: "manual",
+      icon: "book",
+      label: "Explore o Manual completo",
+      hint: "Tutoriais visuais de cada função, passo a passo",
+      done: flags.manual,
+      actionLabel: "Abrir Manual",
+      action: onOpenManual,
     },
   ];
 

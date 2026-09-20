@@ -10,9 +10,11 @@
  */
 const path = require("path");
 const http = require("http");
+const fs = require("fs");
+const crypto = require("crypto");
 const next = require("next");
 const { Server: SocketIOServer } = require("socket.io");
-const { getSecret, getLocalIPs } = require("./lib/shared");
+const { getSecret, getLocalIPs, dataDir } = require("./lib/shared");
 const jwt = require("jsonwebtoken");
 
 // Rede de segurança de último recurso: um erro que escape dos try/catch dos
@@ -205,9 +207,45 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
   // Quantas telas de cada tipo estão conectadas agora — pra quem está
   // operando saber, ANTES do culto começar, se o projetor está mesmo
   // recebendo o sinal (em vez de descobrir só quando já está tarde).
-  const connections = { admin: 0, projection: 0, stage: 0 };
+  const connections = { admin: 0, projection: 0, stage: 0, remote: 0 };
   function broadcastConnections() {
     io.emit("connections:update", connections);
+  }
+
+  /* ─── Controle remoto (celular) ──────────────────────────
+     Sessão própria, deliberadamente mais fraca que a de admin: um token de
+     sessão remota NUNCA deve valer como login de admin, então ele carrega
+     `role: "remote"` e é conferido à parte (ver isAdmin/isRemote abaixo).
+     `remoteEpoch` é o interruptor geral — incrementar invalida TODOS os
+     tokens remotos já emitidos na hora (usado por "Encerrar sessões"), sem
+     precisar de uma lista de tokens revogados. */
+  let remoteEpoch = 0;
+  // Um único código de pareamento ativo por vez — gerar um novo substitui
+  // (não acumula) o anterior. TTL curto: é pra parear no início do culto,
+  // não uma porta permanentemente aberta.
+  let pendingPairing = null; // { pin, token, expiresAt } | null
+  const REMOTE_PAIRING_TTL_MS = 10 * 60 * 1000;
+  const REMOTE_SESSION_TTL = "12h";
+
+  function signRemoteToken() {
+    return jwt.sign({ role: "remote", epoch: remoteEpoch }, getSecret(), { expiresIn: REMOTE_SESSION_TTL });
+  }
+  function isValidRemotePayload(payload) {
+    return !!payload && payload.role === "remote" && payload.epoch === remoteEpoch;
+  }
+
+  /** Leitura direta de uma coleção (fora do ciclo de requisição do Next.js —
+   * server.js é um processo Node simples, não importa as rotas da API).
+   * Usado só pra montar o catálogo que o controle remoto recebe ao conectar. */
+  function readCollectionSync(name) {
+    try {
+      const fp = path.join(dataDir(), `${name}.json`);
+      const raw = fs.readFileSync(fp, "utf-8");
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed.items) ? parsed.items : [];
+    } catch {
+      return [];
+    }
   }
 
   // Pula direto para um passo específico (ex.: clique num card do roteiro)
@@ -282,20 +320,56 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
 
     const token = socket.handshake.auth && socket.handshake.auth.token;
     const payload = token ? verifyToken(token) : null;
-    const isAdmin = !!payload;
+    // Um token de sessão remota é válido (assinado com o mesmo segredo), mas
+    // NUNCA vira admin — só o payload sem `role: "remote"` conta. Sem essa
+    // exclusão, qualquer celular pareado herdaria login completo do painel.
+    const isAdmin = !!payload && payload.role !== "remote";
+    const isRemote = isValidRemotePayload(payload);
 
-    // O tipo de tela (admin/projection/stage) vem do próprio cliente na
+    // O tipo de tela (admin/projeção/palco/remoto) vem do próprio cliente na
     // conexão — só serve pra contar quem está conectado, não afeta permissão
-    // (essa continua vindo exclusivamente do token acima).
-    const role = ["admin", "projection", "stage"].includes(socket.handshake.query.role)
-      ? socket.handshake.query.role
-      : "projection";
-    connections[role]++;
-    broadcastConnections();
-    socket.on("disconnect", () => {
-      connections[role]--;
+    // (essa continua vindo exclusivamente do token acima). "remote-pending" é
+    // a conexão transitória de um celular ainda digitando o PIN: não é
+    // ninguém "conectado" de verdade ainda, então não entra na contagem.
+    const declaredRole = socket.handshake.query.role;
+    const role = ["admin", "projection", "stage", "remote"].includes(declaredRole)
+      ? declaredRole
+      : declaredRole === "remote-pending"
+        ? "remote-pending"
+        : "projection";
+    socket.data.isRemote = isRemote;
+    if (role !== "remote-pending") {
+      connections[role]++;
       broadcastConnections();
+    }
+    socket.on("disconnect", () => {
+      if (role !== "remote-pending") {
+        connections[role]--;
+        broadcastConnections();
+      }
     });
+
+    // Um celular que ACHA que está pareado (declarou role "remote") mas cujo
+    // token não é mais válido — expirou, ou um "Encerrar sessões" mudou o
+    // epoch — precisa descobrir isso na hora, não ficar com uma tela viva
+    // que não manda mais nada pra lugar nenhum. state:update/connections:update
+    // já foram mandados acima (inofensivo), mas nenhum handler é registrado:
+    // a conexão é encerrada aqui mesmo, e o cliente trata isso como "peça
+    // pareamento de novo".
+    if (role === "remote" && !isRemote) {
+      socket.disconnect(true);
+      return;
+    }
+
+    // Catálogo que o controle remoto usa pras abas de Avisos/Mídia — lido do
+    // disco na conexão (não fica guardado em memória o tempo todo: avisos e
+    // mídia mudam raramente perto da frequência de conexão de um celular).
+    if (isRemote) {
+      socket.emit("remote:library", {
+        announcements: readCollectionSync("announcements"),
+        media: readCollectionSync("media-library"),
+      });
+    }
 
     function onlyAdmin(fn) {
       return (...args) => {
@@ -308,6 +382,21 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
           fn(...args);
         } catch (e) {
           console.error("Erro tratando evento do painel:", e);
+        }
+      };
+    }
+
+    // Subconjunto de eventos que o controle remoto também pode disparar —
+    // navegar o roteiro, mostrar um aviso/mídia já existente, exibir um
+    // versículo. Nunca criar/editar/excluir nada, nunca configurações,
+    // nunca backup — só "pôr no ar algo que já existe".
+    function onlyRemoteAllowed(fn) {
+      return (...args) => {
+        if (!isAdmin && !isRemote) return;
+        try {
+          fn(...args);
+        } catch (e) {
+          console.error("Erro tratando evento do controle remoto:", e);
         }
       };
     }
@@ -389,7 +478,7 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
 
     socket.on(
       "admin:showAnnouncement",
-      onlyAdmin((announcement) => {
+      onlyRemoteAllowed((announcement) => {
         // Mesma lógica do admin:selectSong: um aviso avulso (existente, novo
         // ou um texto digitado na hora, ex. um trecho bíblico) pode ser
         // exibido sem perder o lugar no roteiro em apresentação.
@@ -409,7 +498,7 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
     // servidor só guarda e repassa, igual a admin:showAnnouncement.
     socket.on(
       "admin:selectBibleVerse",
-      onlyAdmin((bible) => {
+      onlyRemoteAllowed((bible) => {
         if (!bible || typeof bible.text !== "string") return;
         liveState = {
           ...emptyState(),
@@ -426,7 +515,7 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
     // do aviso/música: o roteiro continua pausado por baixo.
     socket.on(
       "admin:showMedia",
-      onlyAdmin((media) => {
+      onlyRemoteAllowed((media) => {
         if (!media || !media.file) return;
         mediaPaused = false;
         liveState = {
@@ -587,10 +676,11 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
       })
     );
 
-    // Pula direto para um passo específico (clique num card da lista lateral)
+    // Pula direto para um passo específico (clique num card da lista lateral,
+    // ou toque num passo no controle remoto)
     socket.on(
       "admin:goToStep",
-      onlyAdmin((index) => {
+      onlyRemoteAllowed((index) => {
         goToStep(index);
       })
     );
@@ -646,6 +736,65 @@ async function createServer({ dev = false, port = 3210, host = "0.0.0.0", dir = 
         broadcast();
       })
     );
+
+    // ─── Pareamento do controle remoto ────────────────────
+    // Gerado pelo painel (admin), consumido pelo celular. PIN pra digitar de
+    // cabeça, token pra ir embutido no link do QR — as duas portas pro mesmo
+    // código, com o mesmo prazo de validade.
+    socket.on(
+      "admin:remoteCreatePairing",
+      onlyAdmin((_payload, callback) => {
+        const pin = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+        const token = crypto.randomBytes(20).toString("hex");
+        const expiresAt = Date.now() + REMOTE_PAIRING_TTL_MS;
+        pendingPairing = { pin, token, expiresAt };
+        const ips = getLocalIPs();
+        const urls = ips.map((ip) => `http://${ip}:${port}/remote?t=${token}`);
+        if (typeof callback === "function") callback({ pin, token, urls, expiresAt });
+      })
+    );
+
+    // Derruba toda sessão remota já emitida (troca a "chave" de validação) e
+    // desconecta na hora quem já estava pareado — não é só parar de aceitar
+    // tokens novos, é encerrar as conexões abertas agora mesmo.
+    socket.on(
+      "admin:remoteRevokeAll",
+      onlyAdmin(() => {
+        remoteEpoch++;
+        pendingPairing = null;
+        for (const [, s] of io.of("/").sockets) {
+          if (s.data.isRemote) s.disconnect(true);
+        }
+        connections.remote = 0;
+        broadcastConnections();
+      })
+    );
+
+    // Troca PIN/token por uma sessão de verdade. Roda numa conexão ainda sem
+    // login nenhum (role "remote-pending") — por isso não passa por
+    // onlyAdmin/onlyRemoteAllowed: a validação aqui É o próprio PIN.
+    // Limite de tentativas por conexão evita um script tentando adivinhar
+    // os 6 dígitos.
+    let redeemAttempts = 0;
+    socket.on("remote:redeem", (data, callback) => {
+      const reply = typeof callback === "function" ? callback : () => {};
+      if (redeemAttempts++ >= 8) {
+        socket.disconnect(true);
+        return;
+      }
+      if (!pendingPairing || Date.now() > pendingPairing.expiresAt) {
+        reply({ ok: false, error: "Nenhum código ativo — gere um novo no computador." });
+        return;
+      }
+      const pin = data && typeof data.pin === "string" ? data.pin.trim() : "";
+      const tok = data && typeof data.token === "string" ? data.token : "";
+      const matches = (tok && tok === pendingPairing.token) || (pin && pin === pendingPairing.pin);
+      if (!matches) {
+        reply({ ok: false, error: "Código incorreto." });
+        return;
+      }
+      reply({ ok: true, sessionToken: signRemoteToken() });
+    });
   });
 
   return new Promise((resolve, reject) => {

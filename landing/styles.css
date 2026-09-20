@@ -30,6 +30,21 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 800; letter-spacing:
 
 a { color: inherit; text-decoration: none; }
 
+img { max-width: 100%; display: block; }
+
+/* Entrada suave ao rolar — o script no fim do index.html marca .is-visible.
+   Nasce visível pra quem pediu menos movimento no sistema, e o script
+   também libera tudo de uma vez se o navegador não suportar o observer. */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.reveal.is-visible { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+}
+
 .eyebrow {
   display: inline-block;
   font-size: 0.78rem;
@@ -157,11 +172,49 @@ a { color: inherit; text-decoration: none; }
   color: var(--text-muted);
 }
 
+/* Captura do produto logo abaixo do hero: é o argumento mais forte da
+   página, então vem antes de qualquer lista de recursos. A "moldura de
+   janela" existe pra deixar claro que é uma tela de software de verdade. */
+.hero-shot {
+  position: relative;
+  max-width: 1080px;
+  margin: 56px auto 0;
+  padding: 0 24px;
+}
+.shot-frame {
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: #16112a;
+  overflow: hidden;
+  box-shadow: 0 40px 100px rgba(0,0,0,0.6), 0 0 90px rgba(108,58,237,0.18);
+}
+.shot-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.shot-bar span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.18);
+}
+.shot-frame img { width: 100%; height: auto; }
+.hero-shot figcaption {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
 /* ── Sections ──────────────────────────────────── */
 .section {
   max-width: 1120px;
   margin: 0 auto;
-  padding: 80px 24px;
+  padding: 88px 24px;
 }
 .section-alt {
   max-width: none;
@@ -169,35 +222,204 @@ a { color: inherit; text-decoration: none; }
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
-.section-alt > .split { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+.section-alt > .split,
+.section-alt > .section-inner { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
 .section h2 {
   font-size: clamp(1.5rem, 3.4vw, 2.1rem);
   text-align: center;
   margin-bottom: 8px;
+}
+.section-eyebrow {
+  display: block;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--primary-light);
+  margin-bottom: 12px;
 }
 .section-sub {
   text-align: center;
   color: var(--text-secondary);
   margin-bottom: 48px;
   font-size: 1rem;
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-.grid-features {
+/* ── Como funciona (3 passos) ──────────────────── */
+.steps-grid {
+  list-style: none;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 20px;
+  counter-reset: passo;
+}
+.step-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px 26px 26px;
+}
+.step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+  box-shadow: 0 8px 20px rgba(108,58,237,0.35);
+}
+.step-card h3 { font-size: 1.05rem; margin-bottom: 8px; }
+.step-card p { font-size: 0.92rem; color: var(--text-secondary); }
+
+/* Quatro colunas fixas, duas linhas certinhas com os 8 recursos — com
+   auto-fit a última linha ficava com um número quebrado de cards (3 + 5,
+   dependendo da largura) e a grade parecia desmontada. */
+.grid-features {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
 }
 .feature-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 26px;
+  padding: 26px 20px;
+  text-align: center;
   transition: transform 0.2s, border-color 0.2s;
 }
 .feature-card:hover { transform: translateY(-3px); border-color: rgba(108,58,237,0.4); }
-.feature-icon { font-size: 1.8rem; margin-bottom: 14px; }
-.feature-card h3 { font-size: 1.05rem; margin-bottom: 8px; }
-.feature-card p { font-size: 0.9rem; color: var(--text-secondary); }
+/* O emoji vira ícone dentro de uma pastilha: solto no card ele puxa a
+   atenção pra si e faz a grade parecer uma lista de bullet points. */
+.feature-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  margin: 0 auto 14px;
+  font-size: 1.3rem;
+  line-height: 1;
+  background: rgba(108,58,237,0.16);
+  border: 1px solid rgba(108,58,237,0.3);
+}
+.feature-card h3 { font-size: 0.98rem; margin-bottom: 7px; line-height: 1.3; }
+.feature-card p { font-size: 0.855rem; line-height: 1.55; color: var(--text-secondary); }
+
+/* ── As telas (capturas de produto) ────────────── */
+.screens-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+.screen-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.screen-card:hover { transform: translateY(-3px); border-color: rgba(108,58,237,0.4); }
+/* Todas as capturas ocupam a mesma janela 16:9 pra grade ficar alinhada.
+   As de tela cheia entram inteiras (contain, com leve letterbox); a do
+   celular é retrato e, inteira, ficaria minúscula — nela mostramos o topo,
+   que é justamente onde estão o "no ar agora" e os botões. */
+.screen-card img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-deep);
+}
+.screen-card-phone img {
+  object-fit: cover;
+  object-position: top center;
+}
+.screen-card figcaption {
+  padding: 18px 20px 20px;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+.screen-card figcaption strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--text-primary);
+  margin-bottom: 5px;
+}
+
+/* ── Perguntas frequentes ──────────────────────── */
+.faq {
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.faq details {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 20px;
+  transition: border-color 0.2s;
+}
+.faq details[open] { border-color: rgba(108,58,237,0.4); }
+.faq summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 18px 28px 18px 0;
+  position: relative;
+  font-weight: 600;
+  font-size: 0.98rem;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+  content: "+";
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.3rem;
+  font-weight: 400;
+  color: var(--primary-light);
+  line-height: 1;
+}
+.faq details[open] summary::after { content: "−"; }
+.faq details p {
+  padding: 0 0 20px;
+  font-size: 0.93rem;
+  color: var(--text-secondary);
+}
+
+/* ── Chamada final ─────────────────────────────── */
+.cta-card {
+  text-align: center;
+  border: 1px solid rgba(108,58,237,0.35);
+  border-radius: 20px;
+  padding: 56px 32px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(108,58,237,0.28), transparent 62%),
+    var(--bg-card);
+}
+.cta-card h2 { margin-bottom: 10px; }
+.cta-card > p {
+  color: var(--text-secondary);
+  max-width: 520px;
+  margin: 0 auto 26px;
+}
+.cta-note { margin-top: 16px; font-size: 0.82rem; color: var(--text-muted); }
 
 /* ── Por que grátis ────────────────────────────── */
 .split {
@@ -269,8 +491,20 @@ a { color: inherit; text-decoration: none; }
 .footer-inner a { color: var(--text-secondary); text-decoration: underline; }
 
 /* ── Responsivo ────────────────────────────────── */
+@media (max-width: 1000px) {
+  .nav-links { gap: 18px; }
+  .nav-links a { font-size: 0.84rem; }
+  .grid-features { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .grid-features { grid-template-columns: 1fr; }
+}
 @media (max-width: 860px) {
   .nav-links { display: none; }
+  .section { padding: 64px 20px; }
+  .hero { padding: 64px 20px 56px; }
+  .hero-shot { margin-top: 40px; padding: 0 4px; }
+  .cta-card { padding: 40px 22px; }
   .split, .contact-wrap { grid-template-columns: 1fr; }
   .split h2, .contact-wrap h2 { text-align: center; }
   .split > div:first-child { text-align: center; }

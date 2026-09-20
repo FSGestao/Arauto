@@ -20,7 +20,7 @@ import type {
   BibleTranslationMeta,
   BibleReference,
 } from "./types";
-import { getAuthHeaders, getAuthToken, formatCountdown, formatTime, formatTimestamp, STEP_LABEL, parseBibleReference, compareVersions } from "./utils";
+import { getAuthHeaders, getAuthToken, formatCountdown, formatServiceDate, formatTime, formatTimestamp, STEP_LABEL, parseBibleReference, compareVersions } from "./utils";
 import { BACKGROUND_PRESETS, PRESET_PREFIX } from "../../lib/backgroundPresets";
 import { Icon } from "./components/Icon";
 import { EditableCurrentLine } from "./components/EditableCurrentLine";
@@ -105,8 +105,16 @@ export default function DashboardPage() {
   // fora do liveState de propósito (chega a cada 500ms e não deve
   // re-renderizar o roteiro inteiro nem virar estado do servidor).
   const [mediaProgress, setMediaProgress] = useState({ currentTime: 0, duration: 0 });
-  const [connections, setConnections] = useState({ admin: 0, projection: 0, stage: 0 });
+  const [connections, setConnections] = useState({ admin: 0, projection: 0, stage: 0, remote: 0 });
   const socketRef = useRef<Socket | null>(null);
+
+  // Código de pareamento do controle remoto — vive só na memória do painel
+  // (nunca em disco): se a página recarregar, é só gerar outro.
+  const [remotePairing, setRemotePairing] = useState<{
+    pin: string;
+    urls: string[];
+    expiresAt: number;
+  } | null>(null);
 
   // Modals
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
@@ -236,6 +244,7 @@ export default function DashboardPage() {
   }
   function openManual() {
     setShowManual(true);
+    markSetupFlag(SETUP_FLAG.manual);
   }
   function openReleaseNotesHistory() {
     fetch("/api/release-notes")
@@ -266,7 +275,9 @@ export default function DashboardPage() {
     socketRef.current = socket;
     socket.on("state:update", (state: LiveState) => setLive(state));
     socket.on("media:progress", (p: { currentTime: number; duration: number }) => setMediaProgress(p));
-    socket.on("connections:update", (c: { admin: number; projection: number; stage: number }) => setConnections(c));
+    socket.on("connections:update", (c: { admin: number; projection: number; stage: number; remote: number }) =>
+      setConnections(c)
+    );
     return () => {
       socket.disconnect();
     };
@@ -521,6 +532,22 @@ export default function DashboardPage() {
     } else {
       showToast("error", "Erro ao remover tradução");
     }
+  }
+
+  // ─── Controle remoto (celular pareado) ─────────────────
+  function generateRemotePairing() {
+    socketRef.current?.emit(
+      "admin:remoteCreatePairing",
+      null,
+      (res: { pin: string; token: string; urls: string[]; expiresAt: number }) => {
+        if (res) setRemotePairing(res);
+      }
+    );
+  }
+  function revokeRemoteSessions() {
+    socketRef.current?.emit("admin:remoteRevokeAll");
+    setRemotePairing(null);
+    showToast("success", "Todas as sessões do controle remoto foram encerradas");
   }
 
   // ─── Cronômetro de palco (só aparece em /stage) ────────
@@ -928,6 +955,7 @@ export default function DashboardPage() {
                 }}
                 projectionConnected={connections.projection > 0}
                 stageConnected={connections.stage > 0}
+                remoteConnected={connections.remote > 0}
                 onOpenAppearance={() => {
                   setSettingsInitialTab("appearance");
                   setShowSettingsModal(true);
@@ -955,6 +983,11 @@ export default function DashboardPage() {
                   setTimerPanelTab("countdown");
                   setShowCountdownPanel(true);
                 }}
+                onOpenRemote={() => {
+                  setSettingsInitialTab("screens");
+                  setShowSettingsModal(true);
+                }}
+                onOpenManual={openManual}
               />
             )}
             <button
@@ -1353,7 +1386,7 @@ export default function DashboardPage() {
                       >
                         <p className="library-item-title">{sv.title}</p>
                         <p className="library-item-sub">
-                          {sv.date ? new Date(sv.date).toLocaleDateString("pt-BR") : "Sem data"} · {sv.items.length}{" "}
+                          {sv.date ? formatServiceDate(sv.date) : "Sem data"} · {sv.items.length}{" "}
                           {sv.items.length === 1 ? "item" : "itens"}
                         </p>
                         <div className="library-item-actions">
@@ -1630,7 +1663,7 @@ export default function DashboardPage() {
                       <div className="library-item" style={{ cursor: "default" }}>
                         <p className="library-item-title">{activeService.title}</p>
                         <p className="library-item-sub">
-                          {activeService.date ? new Date(activeService.date).toLocaleDateString("pt-BR") : "Sem data"} ·{" "}
+                          {activeService.date ? formatServiceDate(activeService.date) : "Sem data"} ·{" "}
                           {activeService.items.length} {activeService.items.length === 1 ? "item" : "itens"}
                         </p>
                         <div className="library-item-actions">
@@ -2013,7 +2046,7 @@ export default function DashboardPage() {
 
         {/* Contagem regressiva / cronômetro de palco, abertos pelo Timer da dock */}
         {showCountdownPanel && (
-          <div style={{ position: "absolute", bottom: 150, right: 24, width: 380, zIndex: 150 }}>
+          <div className="timer-popover" style={{ position: "absolute", bottom: 150, right: 24, width: 380, zIndex: 150 }}>
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <button
                 className={`btn btn-sm ${timerPanelTab === "countdown" ? "btn-primary" : "btn-secondary"}`}
@@ -2206,6 +2239,10 @@ export default function DashboardPage() {
           onShowOnboarding={openOnboarding}
           onShowReleaseNotes={openReleaseNotesHistory}
           onShowManual={openManual}
+          remotePairing={remotePairing}
+          remoteConnections={connections.remote}
+          onGenerateRemotePairing={generateRemotePairing}
+          onRevokeRemoteSessions={revokeRemoteSessions}
           onSaved={(s) => {
             setSettings(s);
             // Avisa as telas já abertas (projeção, stage): elas carregaram as

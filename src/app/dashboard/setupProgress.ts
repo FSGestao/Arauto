@@ -14,6 +14,8 @@ export const SETUP_FLAG = {
   stage: "arauto-setup-stage",
   bible: "arauto-setup-bible",
   timer: "arauto-setup-timer",
+  remote: "arauto-setup-remote",
+  manual: "arauto-setup-manual",
   dismissed: "arauto-setup-dismissed",
 } as const;
 

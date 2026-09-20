@@ -6,6 +6,10 @@
 <title>Arauto — Sistema de projeção gratuito para igrejas</title>
 <meta name="description" content="Letras, avisos, Bíblia, mídia e roteiro de culto em um só painel. Gratuito, para sempre, feito pra igreja pequena." />
 <link rel="icon" href="arauto-logo.png" />
+<meta property="og:title" content="Arauto — Sistema de projeção gratuito para igrejas" />
+<meta property="og:description" content="Letras, avisos, Bíblia, mídia e roteiro de culto em um só painel. Gratuito, para sempre." />
+<meta property="og:image" content="img/painel.png" />
+<meta property="og:type" content="website" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css" />
@@ -19,9 +23,11 @@
         <span>Arauto</span>
       </a>
       <nav class="nav-links">
+        <a href="#como-funciona">Como funciona</a>
         <a href="#recursos">Recursos</a>
+        <a href="#telas">As telas</a>
         <a href="#gratuito">Por que é grátis</a>
-        <a href="#contato">Fale conosco</a>
+        <a href="#perguntas">Perguntas</a>
       </nav>
       <a class="btn btn-primary nav-cta" href="https://github.com/FSGestao/Arauto/releases/latest/download/Arauto-Setup.exe">Baixar grátis</a>
     </div>
@@ -42,53 +48,132 @@
           <a class="btn btn-primary btn-lg" href="https://github.com/FSGestao/Arauto/releases/latest/download/Arauto-Setup.exe">
             ⬇ Baixar o Arauto
           </a>
-          <a class="btn btn-ghost btn-lg" href="#recursos">Ver o que ele faz</a>
+          <a class="btn btn-ghost btn-lg" href="#como-funciona">Ver como funciona</a>
         </div>
         <p class="hero-note">Windows · instalação em 2 minutos · sem cartão de crédito, sem cadastro</p>
       </div>
+
+      <!-- Captura real do painel em operação, gerada pelo próprio sistema
+           (scripts/gerar-imagens-landing.js) — não é mockup. -->
+      <figure class="hero-shot reveal">
+        <div class="shot-frame">
+          <div class="shot-bar"><span></span><span></span><span></span></div>
+          <img src="img/painel.png" alt="O painel do Arauto com uma música no ar, o roteiro do culto à direita e os controles no rodapé" loading="lazy" width="1582" height="804" />
+        </div>
+        <figcaption>O painel de quem opera — a congregação nunca vê esta tela.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ── Como funciona ────────────────────────────── -->
+    <section id="como-funciona" class="section">
+      <span class="section-eyebrow">Do zero ao telão</span>
+      <h2>Três passos, e o culto de domingo está pronto</h2>
+      <p class="section-sub">Sem servidor, sem conta na nuvem, sem configuração de rede complicada.</p>
+
+      <ol class="steps-grid">
+        <li class="step-card reveal">
+          <span class="step-num">1</span>
+          <h3>Instale no computador da igreja</h3>
+          <p>Um instalador do Windows, dois minutos. Na primeira vez você cria a conta local de administração — e pronto, nada mais.</p>
+        </li>
+        <li class="step-card reveal">
+          <span class="step-num">2</span>
+          <h3>Cadastre o conteúdo durante a semana</h3>
+          <p>Músicas com letra, avisos, mídia e versículos. Depois monte o roteiro do culto na ordem que ele vai acontecer.</p>
+        </li>
+        <li class="step-card reveal">
+          <span class="step-num">3</span>
+          <h3>No domingo, é só apresentar</h3>
+          <p>Abra a Projeção no computador do telão e clique em "Apresentar". O resto é avançar com a seta do teclado — ou pelo celular.</p>
+        </li>
+      </ol>
     </section>
 
     <!-- ── Recursos ─────────────────────────────────── -->
     <section id="recursos" class="section">
+      <span class="section-eyebrow">Recursos</span>
       <h2>Tudo que uma igreja pequena precisa pra projetar o culto</h2>
       <p class="section-sub">Sem módulos pagos escondidos, sem limite de uso.</p>
 
       <div class="grid-features">
-        <div class="feature-card">
+        <div class="feature-card reveal">
           <div class="feature-icon">🎵</div>
           <h3>Letras de música</h3>
           <p>Importa legenda direto do YouTube, ou cole/edite manualmente — com avanço automático no ritmo da música.</p>
         </div>
-        <div class="feature-card">
+        <div class="feature-card reveal">
           <div class="feature-icon">📖</div>
           <h3>Bíblia embutida</h3>
           <p>Busque um versículo digitando "jo 3:16" e projete na hora. Aceita importar outras traduções.</p>
         </div>
-        <div class="feature-card">
+        <div class="feature-card reveal">
           <div class="feature-icon">📢</div>
           <h3>Avisos com modelo</h3>
           <p>Crie avisos com imagem ou vídeo, e reaproveite modelos com variáveis pra não redigitar toda semana.</p>
         </div>
-        <div class="feature-card">
+        <div class="feature-card reveal">
           <div class="feature-icon">🗂️</div>
           <h3>Roteiro de culto</h3>
           <p>Monte a ordem do culto com antecedência e apresente com um clique — avance com o teclado, sem clicar em nada.</p>
         </div>
-        <div class="feature-card">
+        <div class="feature-card reveal">
           <div class="feature-icon">🎬</div>
           <h3>Mídia e fundos animados</h3>
           <p>Vídeos, imagens, trilhas — enviadas ou do YouTube — mais fundos animados prontos pra tela de projeção.</p>
         </div>
-        <div class="feature-card">
+        <div class="feature-card reveal">
           <div class="feature-icon">🖥️</div>
           <h3>Monitor de palco</h3>
           <p>Uma tela própria pra quem está no palco acompanhar a letra e o próximo passo, sem depender do telão.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon">📱</div>
+          <h3>Controle remoto pelo celular</h3>
+          <p>Pareie um celular com um código e avance o roteiro, mostre um aviso ou projete um versículo sem estar no computador.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon">🧭</div>
+          <h3>Guia de primeiros passos</h3>
+          <p>Um roteiro dentro do próprio painel — e um manual com tutoriais visuais de cada função — pra não descobrir nada ao vivo, no meio do culto.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── As telas ─────────────────────────────────── -->
+    <section id="telas" class="section section-alt">
+      <div class="section-inner">
+        <span class="section-eyebrow">As telas</span>
+        <h2>Cada pessoa vê exatamente o que precisa</h2>
+        <p class="section-sub">O mesmo culto, em três telas diferentes ao mesmo tempo — e no celular de quem conduz.</p>
+
+        <div class="screens-grid">
+          <figure class="screen-card reveal">
+            <img src="img/projecao.png" alt="Tela de projeção mostrando a letra da música no telão" loading="lazy" />
+            <figcaption>
+              <strong>Projeção</strong>
+              O que a congregação vê no telão: limpo, sem menus, com as cores da sua igreja.
+            </figcaption>
+          </figure>
+          <figure class="screen-card reveal">
+            <img src="img/stage.png" alt="Stage View com a letra atual e a próxima linha para quem está no palco" loading="lazy" />
+            <figcaption>
+              <strong>Stage View</strong>
+              O monitor de confiança do palco: linha atual, próxima linha, avisos e cronômetro.
+            </figcaption>
+          </figure>
+          <figure class="screen-card screen-card-phone reveal">
+            <img src="img/celular.png" alt="Controle remoto do Arauto aberto no celular" loading="lazy" />
+            <figcaption>
+              <strong>Celular</strong>
+              O controle remoto: avança o roteiro e projeta avisos, mídia e versículos de qualquer lugar.
+            </figcaption>
+          </figure>
         </div>
       </div>
     </section>
 
     <!-- ── Por que é grátis ─────────────────────────── -->
-    <section id="gratuito" class="section section-alt">
+    <section id="gratuito" class="section">
       <div class="split">
         <div>
           <span class="eyebrow">Sem pegadinha</span>
@@ -113,6 +198,52 @@
             <li>✓ Atualizações automáticas e gratuitas</li>
           </ul>
         </div>
+      </div>
+    </section>
+
+    <!-- ── Perguntas ────────────────────────────────── -->
+    <section id="perguntas" class="section">
+      <span class="section-eyebrow">Perguntas frequentes</span>
+      <h2>O que perguntam antes de instalar</h2>
+      <p class="section-sub">Se a sua dúvida não estiver aqui, é só mandar uma mensagem no fim da página.</p>
+
+      <div class="faq">
+        <details>
+          <summary>Precisa de internet durante o culto?</summary>
+          <p>Não. O Arauto roda inteiro no computador da igreja — letras, avisos, Bíblia e mídia enviada funcionam offline. Internet só é necessária para importar legenda do YouTube, tocar um vídeo do YouTube ao vivo e baixar atualizações.</p>
+        </details>
+        <details>
+          <summary>Os dados da minha igreja vão para a nuvem?</summary>
+          <p>Não. Tudo fica gravado no próprio computador, numa pasta de dados do aplicativo. Não existe conta online, não existe sincronização automática e ninguém além de quem usa o computador tem acesso. Para levar os dados para outra máquina, use o backup em .zip nas Configurações.</p>
+        </details>
+        <details>
+          <summary>Funciona no Mac ou no Linux?</summary>
+          <p>Hoje o instalador pronto é de Windows. O painel em si é acessado pelo navegador, então outros computadores da mesma rede — inclusive Mac, Linux, tablets e celulares — conseguem abrir a Projeção, a Stage View e o controle remoto normalmente.</p>
+        </details>
+        <details>
+          <summary>Preciso de dois computadores?</summary>
+          <p>Não é obrigatório. Com um computador e duas saídas de vídeo (monitor + projetor), o painel fica no monitor e a Projeção vai para o telão. Se preferir, um segundo computador na mesma rede abre a Projeção pelo endereço mostrado nas Configurações.</p>
+        </details>
+        <details>
+          <summary>E se eu travar no meio do culto?</summary>
+          <p>O painel traz um guia de primeiros passos e um manual completo com tutoriais visuais de cada função — os mesmos caminhos, passo a passo, sem precisar sair do sistema nem procurar na internet.</p>
+        </details>
+        <details>
+          <summary>Como recebo as atualizações?</summary>
+          <p>O aplicativo avisa quando existe uma versão nova e instala sozinho, sem custo. Nada do que já está cadastrado se perde na atualização.</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- ── Chamada final ────────────────────────────── -->
+    <section class="section">
+      <div class="cta-card">
+        <h2>Comece a usar neste domingo</h2>
+        <p>Baixe, instale e cadastre a primeira música em poucos minutos. Não custa nada e nunca vai custar.</p>
+        <a class="btn btn-primary btn-lg" href="https://github.com/FSGestao/Arauto/releases/latest/download/Arauto-Setup.exe">
+          ⬇ Baixar o Arauto para Windows
+        </a>
+        <p class="cta-note">Código aberto · sem cadastro · sem anúncios</p>
       </div>
     </section>
 
@@ -155,6 +286,26 @@
       <p>Feito para servir igrejas. Código aberto no <a href="https://github.com/FSGestao/Arauto" target="_blank" rel="noopener">GitHub</a>.</p>
     </div>
   </footer>
+
+  <script>
+    /* Entrada suave dos blocos ao rolar. Só um enfeite: se o navegador não
+       tiver IntersectionObserver, ou se a pessoa pediu menos movimento no
+       sistema, tudo já nasce visível (ver .reveal no CSS). */
+    (function () {
+      var alvos = document.querySelectorAll('.reveal');
+      var pouco = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (pouco || !('IntersectionObserver' in window)) {
+        alvos.forEach(function (el) { el.classList.add('is-visible'); });
+        return;
+      }
+      var obs = new IntersectionObserver(function (entradas) {
+        entradas.forEach(function (e) {
+          if (e.isIntersecting) { e.target.classList.add('is-visible'); obs.unobserve(e.target); }
+        });
+      }, { rootMargin: '0px 0px -10% 0px' });
+      alvos.forEach(function (el) { obs.observe(el); });
+    })();
+  </script>
 
 </body>
 </html>

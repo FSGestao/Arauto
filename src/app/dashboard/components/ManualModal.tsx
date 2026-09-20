@@ -17,6 +17,11 @@ interface ManualTask {
   result?: string;
   tips?: string[];
   issues?: string[];
+  /** Nome do arquivo em public/tutoriais/ — um GIF curto mostrando onde a
+   *  função fica, sempre a partir da tela inicial do painel. Opcional: só as
+   *  tarefas de "onde encontrar algo" têm um; passo a passo de formulário
+   *  (preencher campos, etc.) não precisa. */
+  gif?: string;
 }
 
 interface ManualSection {
@@ -123,6 +128,7 @@ const MANUAL: ManualSection[] = [
     tasks: [
       {
         title: "Criar um roteiro",
+        gif: "roteiro.gif",
         steps: ["Aba Cultos → \"Novo Culto\" → preencha nome (e data, opcional) → \"Criar Culto\"."],
         result: "O culto aparece na lista, com roteiro vazio.",
       },
@@ -182,6 +188,7 @@ const MANUAL: ManualSection[] = [
     tasks: [
       {
         title: "Criar uma nova canção",
+        gif: "musica.gif",
         steps: [
           "Aba Letras → \"Nova Música\".",
           "Escolha \"Manual\" ou \"Do YouTube\".",
@@ -251,6 +258,7 @@ const MANUAL: ManualSection[] = [
       },
       {
         title: "Localizar e projetar um versículo",
+        gif: "biblia.gif",
         steps: [
           "Aba Bíblia → digite uma referência no campo de busca (ex.: \"jo 3:16\" ou \"salmos 23\") — ou navegue clicando em um livro e depois no capítulo, na lista da esquerda.",
           "Clique no versículo desejado para colocá-lo no ar imediatamente.",
@@ -275,6 +283,7 @@ const MANUAL: ManualSection[] = [
     tasks: [
       {
         title: "Criar um aviso simples",
+        gif: "aviso.gif",
         steps: [
           "Aba Avisos → \"Novo Aviso\".",
           "Preencha o Título.",
@@ -318,6 +327,7 @@ const MANUAL: ManualSection[] = [
     tasks: [
       {
         title: "Enviar um arquivo local",
+        gif: "midia.gif",
         steps: [
           "Aba Mídia → \"Enviar Áudio/Vídeo\" → aba \"Arquivo local\".",
           "Selecione o arquivo: áudio (mp3, wav, ogg, m4a — até 100 MB), vídeo (mp4, webm, ogv — até 300 MB) ou imagem (jpg, png, gif, webp — até 20 MB).",
@@ -361,6 +371,7 @@ const MANUAL: ManualSection[] = [
     tasks: [
       {
         title: "Abrir a tela de Projeção",
+        gif: "projecao.gif",
         steps: [
           "No computador ligado ao telão: clique em \"Abrir Projeção\" na barra de cima do painel (se for o mesmo computador), ou",
           "Abra o navegador nesse computador e digite o endereço de rede mostrado em Configurações > Telas.",
@@ -423,6 +434,7 @@ const MANUAL: ManualSection[] = [
     tasks: [
       {
         title: "Abrir a Stage View",
+        gif: "stage.gif",
         when: "Sempre que houver um culto ao vivo — quem está no palco precisa do monitor de confiança.",
         steps: ["Clique no ícone de palco na barra de cima do painel, ou abra o endereço de rede mostrado em Configurações > Telas > \"Stage View\" no tablet/monitor do palco."],
         result: "A Stage View mostra a letra atual, a próxima linha, avisos e o timer de palco — sem a identidade visual da Projeção pública.",
@@ -447,6 +459,7 @@ const MANUAL: ManualSection[] = [
     tasks: [
       {
         title: "Iniciar uma contagem regressiva",
+        gif: "timer.gif",
         when: "Antes do culto começar (\"entra em 5 minutos\") ou em qualquer intervalo.",
         steps: [
           "No rodapé do painel, clique no valor do Timer para abrir o painel.",
@@ -494,6 +507,7 @@ const MANUAL: ManualSection[] = [
     tasks: [
       {
         title: "Personalizar aparência e cores",
+        gif: "aparencia.gif",
         steps: [
           "Configurações → aba \"Aparência\".",
           "Ajuste Nome da Igreja, URL do Logo, as 4 cores (primária, secundária, fundo e texto da projeção) e a posição do texto (letras/avisos e contagem regressiva).",
@@ -507,6 +521,22 @@ const MANUAL: ManualSection[] = [
         title: "Descobrir o endereço para abrir a Projeção/Stage View em outro computador",
         steps: ["Configurações → aba \"Telas\" — os endereços de rede da Projeção e da Stage View aparecem prontos para copiar."],
         result: "Digite esse endereço no navegador do computador ligado ao telão (ou no tablet do palco), desde que estejam na mesma rede Wi-Fi/cabo do computador que roda o Arauto.",
+      },
+      {
+        title: "Parear e usar o controle remoto pelo celular",
+        when: "Quando quem está conduzindo o culto (ex. o pastor) precisa avançar o roteiro, mostrar um aviso/mídia ou projetar um versículo sem estar no computador.",
+        gif: "remoto.gif",
+        steps: [
+          "Configurações → aba \"Telas\" → \"Controle remoto (celular)\" → \"Gerar código de pareamento\".",
+          "No celular (na mesma Wi-Fi), abra o endereço /remote e digite o código de 6 dígitos, ou escaneie o QR code mostrado no painel.",
+          "Use as abas Roteiro, Avisos, Mídia e Bíblia no celular para navegar e projetar.",
+        ],
+        result: "O celular passa a controlar o que está no telão, em tempo real, com as mesmas ações básicas do painel.",
+        tips: [
+          "O código expira em 10 minutos — gere um novo se demorar para parear.",
+          "\"Encerrar sessões\" (no painel, depois de gerar um código) desconecta na hora qualquer celular pareado.",
+        ],
+        issues: ["O controle remoto nunca cria, edita ou apaga nada, e não acessa configurações, backup ou contas — só mostra e projeta o que já existe."],
       },
       {
         title: "Exportar um backup",
@@ -549,9 +579,98 @@ const MANUAL: ManualSection[] = [
   },
 ];
 
+/** Texto completo de uma tarefa, para a busca do manual. */
+function textoDaTarefa(t: ManualTask) {
+  return [t.title, t.when, t.result, ...t.steps, ...(t.tips ?? []), ...(t.issues ?? [])]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function TarefaCard({ task, numero }: { task: ManualTask; numero: number }) {
+  return (
+    <article className="manual-task">
+      <header className="manual-task-head">
+        <span className="manual-task-num">{numero}</span>
+        <h4 className="manual-task-title">{task.title}</h4>
+      </header>
+      <div className="manual-task-body">
+        {task.gif && (
+          /* O recorte já vem enquadrado e num tamanho único pelo gerador
+             (scripts/gerar-gifs-manual.js) — a moldura aqui só dá o
+             acabamento de "tela", com a legenda explicando o que se vê. */
+          <figure className="manual-figure">
+            <div className="manual-figure-frame">
+              <img
+                className="manual-task-gif"
+                src={`/tutoriais/${task.gif}`}
+                alt={`Onde encontrar: ${task.title}`}
+                loading="lazy"
+              />
+            </div>
+            <figcaption>Onde fica — a partir da tela inicial do painel</figcaption>
+          </figure>
+        )}
+        {task.when && (
+          <div className="manual-block">
+            <p className="manual-block-label">Quando usar</p>
+            <p className="manual-block-text">{task.when}</p>
+          </div>
+        )}
+        <div className="manual-block">
+          <p className="manual-block-label">Passo a passo</p>
+          <ol className="manual-steps">
+            {task.steps.map((step, i) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ol>
+        </div>
+        {task.result && (
+          <div className="manual-block manual-block-result">
+            <p className="manual-block-label">Resultado esperado</p>
+            <p className="manual-block-text">{task.result}</p>
+          </div>
+        )}
+        {task.tips && task.tips.length > 0 && (
+          <div className="manual-task-note tip">
+            <Icon name="checklist" size={15} />
+            <span>{task.tips.join(" ")}</span>
+          </div>
+        )}
+        {task.issues && task.issues.length > 0 && (
+          <div className="manual-task-note issue">
+            <Icon name="bell" size={15} />
+            <span>{task.issues.join(" ")}</span>
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
 export function ManualModal({ onClose }: { onClose: () => void }) {
   const [activeId, setActiveId] = useState(MANUAL[0].id);
+  const [busca, setBusca] = useState("");
   const active = MANUAL.find((s) => s.id === activeId) ?? MANUAL[0];
+  const indiceAtivo = MANUAL.findIndex((s) => s.id === active.id);
+
+  /* Busca: com 60+ tarefas espalhadas em 13 seções, procurar "backup" ou
+     "YouTube" abrindo seção por seção é o tipo de coisa que faz a pessoa
+     desistir do manual. Quando há texto, o conteúdo vira uma lista de
+     resultados agrupada por seção, e a navegação da esquerda passa a mostrar
+     quantos resultados caem em cada uma. */
+  const termo = busca.trim().toLowerCase();
+  const resultados = termo
+    ? MANUAL.map((s) => ({ ...s, tasks: s.tasks.filter((t) => textoDaTarefa(t).includes(termo)) })).filter(
+        (s) => s.tasks.length > 0
+      )
+    : null;
+  const totalResultados = resultados?.reduce((n, s) => n + s.tasks.length, 0) ?? 0;
+
+  function contagemNaSecao(id: string) {
+    if (!resultados) return null;
+    return resultados.find((s) => s.id === id)?.tasks.length ?? 0;
+  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -560,10 +679,20 @@ export function ManualModal({ onClose }: { onClose: () => void }) {
           <div className="manual-head-icon">
             <Icon name="book" size={19} />
           </div>
-          <div style={{ flex: 1 }}>
-            <h2>Manual de Uso — Arauto</h2>
-            <p>Guia completo, organizado por tarefa — o que fazer e como fazer, passo a passo.</p>
+          <div className="manual-head-text">
+            <span className="manual-head-eyebrow">Arauto</span>
+            <h2>Manual de uso</h2>
           </div>
+          <label className="manual-search">
+            <Icon name="search" size={15} />
+            <input
+              type="search"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar no manual…"
+              aria-label="Buscar no manual"
+            />
+          </label>
           <button className="toolbar-icon-btn" onClick={onClose} title="Fechar" style={{ fontSize: "1.1rem" }}>
             ×
           </button>
@@ -571,71 +700,69 @@ export function ManualModal({ onClose }: { onClose: () => void }) {
 
         <div className="manual-body">
           <nav className="manual-nav">
-            {MANUAL.map((s) => (
-              <button
-                key={s.id}
-                className={`manual-nav-btn ${activeId === s.id ? "active" : ""}`}
-                onClick={() => setActiveId(s.id)}
-              >
-                <Icon name={s.icon} size={16} />
-                {s.title}
-              </button>
-            ))}
+            <p className="manual-nav-label">Seções</p>
+            {MANUAL.map((s) => {
+              const n = contagemNaSecao(s.id);
+              return (
+                <button
+                  key={s.id}
+                  className={`manual-nav-btn ${!termo && activeId === s.id ? "active" : ""} ${
+                    n === 0 ? "faded" : ""
+                  }`}
+                  onClick={() => {
+                    setBusca("");
+                    setActiveId(s.id);
+                  }}
+                >
+                  <Icon name={s.icon} size={16} />
+                  <span className="manual-nav-title">{s.title}</span>
+                  <span className="manual-nav-count">{n ?? s.tasks.length}</span>
+                </button>
+              );
+            })}
           </nav>
 
           <div className="manual-content">
-            <div className="manual-content-head">
-              <h3>{active.title}</h3>
-              <span className="manual-content-count">
-                {active.tasks.length} {active.tasks.length === 1 ? "tarefa" : "tarefas"}
-              </span>
-            </div>
-            {active.intro && <p className="manual-content-intro">{active.intro}</p>}
-
-            <div>
-              {active.tasks.map((task, idx) => (
-                <div key={task.title} className="manual-task">
-                  <p className="manual-task-title">
-                    <span className="manual-task-num">{idx + 1}</span>
-                    {task.title}
-                  </p>
-                  <div className="manual-task-body">
-                    {task.when && (
-                      <div className="manual-task-field">
-                        <p className="field-label">Quando usar</p>
-                        <p>{task.when}</p>
-                      </div>
-                    )}
-                    <div className="manual-task-field">
-                      <p className="field-label">Passo a passo</p>
-                      <ol className="manual-task-steps">
-                        {task.steps.map((step, i) => (
-                          <li key={i}>{step}</li>
-                        ))}
-                      </ol>
-                    </div>
-                    {task.result && (
-                      <div className="manual-task-field">
-                        <p className="field-label">Resultado esperado</p>
-                        <p>{task.result}</p>
-                      </div>
-                    )}
-                    {task.tips && task.tips.length > 0 && (
-                      <div className="manual-task-note tip">
-                        <Icon name="checklist" size={15} />
-                        <span>{task.tips.join(" ")}</span>
-                      </div>
-                    )}
-                    {task.issues && task.issues.length > 0 && (
-                      <div className="manual-task-note issue">
-                        <Icon name="bell" size={15} />
-                        <span>{task.issues.join(" ")}</span>
-                      </div>
-                    )}
-                  </div>
+            {resultados ? (
+              <>
+                <div className="manual-content-head">
+                  <span className="manual-eyebrow">Busca</span>
+                  <h3>
+                    {totalResultados} {totalResultados === 1 ? "resultado" : "resultados"} para “{busca.trim()}”
+                  </h3>
                 </div>
-              ))}
-            </div>
+                {totalResultados === 0 && (
+                  <p className="manual-empty">
+                    Nada encontrado. Tente uma palavra mais simples — “letra”, “roteiro”, “backup”, “celular”.
+                  </p>
+                )}
+                {resultados.map((s) => (
+                  <section key={s.id} className="manual-result-group">
+                    <p className="manual-result-group-title">
+                      <Icon name={s.icon} size={14} />
+                      {s.title}
+                    </p>
+                    {s.tasks.map((task, idx) => (
+                      <TarefaCard key={task.title} task={task} numero={idx + 1} />
+                    ))}
+                  </section>
+                ))}
+              </>
+            ) : (
+              <>
+                <div className="manual-content-head">
+                  <span className="manual-eyebrow">
+                    Seção {indiceAtivo + 1} de {MANUAL.length} · {active.tasks.length}{" "}
+                    {active.tasks.length === 1 ? "tarefa" : "tarefas"}
+                  </span>
+                  <h3>{active.title}</h3>
+                  {active.intro && <p className="manual-content-intro">{active.intro}</p>}
+                </div>
+                {active.tasks.map((task, idx) => (
+                  <TarefaCard key={task.title} task={task} numero={idx + 1} />
+                ))}
+              </>
+            )}
           </div>
         </div>
       </div>

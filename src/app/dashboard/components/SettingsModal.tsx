@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import QRCode from "qrcode";
 import type { Settings } from "../types";
 import { getAuthHeaders } from "../utils";
 import { Icon } from "./Icon";
@@ -43,6 +44,10 @@ export function SettingsModal({
   networkUrls,
   stageUrls,
   initialTab = "appearance",
+  remotePairing,
+  remoteConnections,
+  onGenerateRemotePairing,
+  onRevokeRemoteSessions,
   onClose,
   onLogout,
   onShowOnboarding,
@@ -54,6 +59,10 @@ export function SettingsModal({
   networkUrls: string[];
   stageUrls: string[];
   initialTab?: SettingsTab;
+  remotePairing: { pin: string; urls: string[]; expiresAt: number } | null;
+  remoteConnections: number;
+  onGenerateRemotePairing: () => void;
+  onRevokeRemoteSessions: () => void;
   onClose: () => void;
   onLogout: () => void;
   onShowOnboarding: () => void;
@@ -259,6 +268,13 @@ export function SettingsModal({
                   </p>
                 ))
               )}
+
+              <RemoteControlCard
+                pairing={remotePairing}
+                connectedCount={remoteConnections}
+                onGenerate={onGenerateRemotePairing}
+                onRevoke={onRevokeRemoteSessions}
+              />
             </div>
           )}
 
@@ -297,6 +313,107 @@ export function SettingsModal({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Controle remoto — pareamento do celular. Diferente do QR de "assistir a
+ * projeção" (que qualquer um pode escanear, é só leitura pública), este
+ * código dá controle de verdade sobre o que aparece no telão — por isso tem
+ * prazo curto, é de uso único por vez (gerar outro invalida o anterior) e
+ * existe um botão pra cortar todo mundo na hora.
+ */
+function RemoteControlCard({
+  pairing,
+  connectedCount,
+  onGenerate,
+  onRevoke,
+}: {
+  pairing: { pin: string; urls: string[]; expiresAt: number } | null;
+  connectedCount: number;
+  onGenerate: () => void;
+  onRevoke: () => void;
+}) {
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [remainingMs, setRemainingMs] = useState(0);
+
+  useEffect(() => {
+    if (!pairing) {
+      setQrDataUrl(null);
+      return;
+    }
+    const url = pairing.urls[0];
+    if (!url) return;
+    let cancelled = false;
+    QRCode.toDataURL(url, { width: 176, margin: 1, color: { dark: "#0F0A1E", light: "#FFFFFF" } })
+      .then((d) => !cancelled && setQrDataUrl(d))
+      .catch(() => !cancelled && setQrDataUrl(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [pairing]);
+
+  // Contagem regressiva visível — quem está gerando o código no domingo de
+  // manhã precisa saber se ainda dá tempo de parear antes de expirar.
+  useEffect(() => {
+    if (!pairing) return;
+    function tick() {
+      setRemainingMs(Math.max(0, (pairing?.expiresAt ?? 0) - Date.now()));
+    }
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [pairing]);
+
+  const expired = !!pairing && remainingMs <= 0;
+  const minutes = Math.floor(remainingMs / 60000);
+  const seconds = Math.floor((remainingMs % 60000) / 1000);
+  const pinFormatted = pairing ? `${pairing.pin.slice(0, 3)} ${pairing.pin.slice(3)}` : "";
+
+  return (
+    <div style={{ marginTop: 22, paddingTop: 18, borderTop: "1px solid var(--border-glass)" }}>
+      <p style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: 3 }}>Controle remoto (celular)</p>
+      <p style={{ marginBottom: 12 }}>
+        Gere um código para parear um celular: dá pra avançar o roteiro, mostrar um aviso, tocar uma mídia ou um
+        versículo — direto de lá, sem precisar estar no computador.
+      </p>
+
+      {!pairing || expired ? (
+        <button type="button" className="act-btn primary" onClick={onGenerate}>
+          <Icon name="checklist" /> {expired ? "Gerar novo código" : "Gerar código de pareamento"}
+        </button>
+      ) : (
+        <div className="share-screen-card">
+          <div className="share-screen-info">
+            <p className="share-screen-title" style={{ fontSize: "1.3rem", letterSpacing: "0.04em" }}>
+              {pinFormatted}
+            </p>
+            <p className="share-screen-hint">
+              No celular, abra <code>/remote</code> na mesma Wi-Fi e digite este código, ou escaneie o QR.
+            </p>
+            <p style={{ marginTop: 8, fontSize: "0.78rem", color: "var(--text-muted)" }}>
+              Expira em {minutes}:{String(seconds).padStart(2, "0")}
+              {connectedCount > 0 && ` · ${connectedCount} conectado(s) agora`}
+            </p>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button type="button" className="act-btn ghost" onClick={onGenerate}>
+                Gerar outro código
+              </button>
+              {connectedCount > 0 && (
+                <button type="button" className="act-btn ghost" onClick={onRevoke} style={{ color: "var(--danger)" }}>
+                  Encerrar sessões
+                </button>
+              )}
+            </div>
+          </div>
+          {qrDataUrl && (
+            <div className="share-screen-qr">
+              <img src={qrDataUrl} alt="QR code para parear o controle remoto" width={110} height={110} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

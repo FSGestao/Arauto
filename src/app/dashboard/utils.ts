@@ -100,3 +100,17 @@ export function formatTimestamp(ms: number): string {
   const s = total % 60;
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
+
+/**
+ * Data de um culto (guardada como "AAAA-MM-DD") no formato dd/mm/aaaa.
+ *
+ * Feito na mão de propósito: `new Date("2026-01-11")` é interpretado como
+ * meia-noite em UTC e, em qualquer fuso a oeste de Greenwich (o Brasil
+ * inteiro), volta um dia — um culto marcado para domingo aparecia no painel
+ * com a data de sábado.
+ */
+export function formatServiceDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return new Date(iso).toLocaleDateString("pt-BR");
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
