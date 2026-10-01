@@ -11,6 +11,9 @@ export interface ArautoUpdateStatus {
 export interface ArautoBridge {
   version: () => Promise<string>;
   checkForUpdate: () => Promise<void>;
+  /** Último estado já emitido (null se nenhuma verificação rodou ainda).
+   *  Opcional: instalações antigas do app não expõem. */
+  lastUpdateStatus?: () => Promise<ArautoUpdateStatus | null>;
   installUpdate: () => void;
   onUpdateStatus: (callback: (status: ArautoUpdateStatus) => void) => () => void;
 }

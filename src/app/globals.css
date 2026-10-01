@@ -962,6 +962,30 @@ body.setup-drawer-open .cockpit {
   box-shadow: 0 6px 20px rgba(108, 58, 237, 0.35);
 }
 
+/* Aviso de atualização baixada: discreto (contorno verde, sem fundo
+   cheio), pra não competir com "Abrir Projeção" durante o culto. */
+.toolbar-update {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: var(--transition);
+}
+.toolbar-update svg { width: 17px; height: 17px; flex-shrink: 0; }
+.toolbar-update:hover { background: rgba(16, 185, 129, 0.18); }
+.toolbar-update .update-short { display: none; }
+
 /* Telas conectadas: três pontinhos discretos (detalhe no title). */
 .toolbar-connections {
   display: flex;
@@ -2693,10 +2717,14 @@ tr:hover {
     padding: 0;
   }
   .conn-item { font-size: 0.68rem; }
+  .toolbar-update .update-long { display: none; }
+  .toolbar-update .update-short { display: inline; }
 }
 @container toolbar (max-width: 1240px) {
   .toolbar-cta { padding: 13px 14px; }
   .toolbar-cta span { display: none; }
+  .toolbar-update { width: 46px; padding: 0; justify-content: center; }
+  .toolbar-update .update-short { display: none; }
 }
 @container toolbar (max-width: 1150px) {
   .filter-tab { padding: 11px 13px; }
@@ -2718,6 +2746,7 @@ tr:hover {
   .cockpit { gap: 8px; padding-bottom: 8px; }
   .cockpit-toolbar { padding-top: 10px; padding-bottom: 10px; }
   .toolbar-icon-btn { width: 42px; height: 42px; }
+  .toolbar-update { height: 42px; }
   .filter-tab { padding-top: 10px; padding-bottom: 10px; }
   .toolbar-search input { padding-top: 10px; padding-bottom: 10px; }
   .toolbar-cta { padding-top: 11px; padding-bottom: 11px; }

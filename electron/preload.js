@@ -10,6 +10,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("arauto", {
   version: () => ipcRenderer.invoke("update:version"),
   checkForUpdate: () => ipcRenderer.invoke("update:check"),
+  lastUpdateStatus: () => ipcRenderer.invoke("update:last-status"),
   installUpdate: () => ipcRenderer.send("update:install"),
   onUpdateStatus: (callback) => {
     const handler = (_event, status) => callback(status);

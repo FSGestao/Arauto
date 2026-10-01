@@ -17,7 +17,13 @@ process.on("unhandledRejection", (e) => console.error("[Arauto] Promessa rejeita
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = false;
 
+// Último estado conhecido: o download pode terminar antes de o painel
+// assinar os avisos (ou enquanto ele recarrega) — sem guardar, o aviso de
+// "atualização pronta" se perderia e ninguém saberia que tem algo pra instalar.
+let lastUpdateStatus = null;
+
 function sendUpdateStatus(status) {
+  lastUpdateStatus = status;
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("update:status", status);
   }
@@ -42,6 +48,7 @@ autoUpdater.on("error", (err) => sendUpdateStatus({ state: "error", message: err
 
 function wireUpdateIpc() {
   ipcMain.handle("update:version", () => app.getVersion());
+  ipcMain.handle("update:last-status", () => lastUpdateStatus);
   ipcMain.handle("update:check", async () => {
     if (!app.isPackaged) {
       // Em desenvolvimento não há instalador nem feed de update — avisa em

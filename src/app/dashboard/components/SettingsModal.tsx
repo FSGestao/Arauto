@@ -536,6 +536,9 @@ function UpdateCard() {
     if (!window.arauto) return;
     setAvailable(true);
     window.arauto.version().then(setVersion).catch(() => {});
+    window.arauto.lastUpdateStatus?.()
+      .then((s) => { if (s) { setStatus(s); setHasChecked(true); } })
+      .catch(() => {});
     const unsubscribe = window.arauto.onUpdateStatus((s) => {
       setStatus(s);
       setHasChecked(true);

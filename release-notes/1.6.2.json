@@ -1,0 +1,10 @@
+{
+  "version": "1.6.2",
+  "date": "2026-10-01",
+  "title": "Aviso de atualização no painel",
+  "status": "approved",
+  "items": [
+    "Novo: quando uma versão nova do Arauto termina de baixar, aparece um botão verde \"Atualização pronta\" no topo do painel. Clique nele quando for um bom momento — fora do culto — para reiniciar e instalar.",
+    "O Arauto nunca reinicia nem instala sozinho, nem ao fechar: assim uma atualização jamais derruba a projeção no meio do culto. Antes de reiniciar, ele sempre pede confirmação."
+  ]
+}

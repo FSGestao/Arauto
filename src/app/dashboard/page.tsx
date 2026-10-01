@@ -35,6 +35,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { OnboardingModal, ReleaseNotesModal, type ReleaseNoteEntry } from "./components/HelpModals";
 import { ManualModal } from "./components/ManualModal";
 import { SetupChecklist } from "./components/SetupChecklist";
+import { UpdateNotice } from "./components/UpdateNotice";
 import { SETUP_FLAG, markSetupFlag } from "./setupProgress";
 import { BibleUploadModal } from "./components/BibleModals";
 
@@ -997,6 +998,7 @@ export default function DashboardPage() {
             >
               <Icon name="checklist" />
             </button>
+            <UpdateNotice />
             <button className="toolbar-icon-btn" onClick={openStageWindow} title="Abrir Stage View (monitor de confiança)">
               <Icon name="stage" />
             </button>
