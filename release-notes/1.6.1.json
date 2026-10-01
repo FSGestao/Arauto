@@ -1,0 +1,11 @@
+{
+  "version": "1.6.1",
+  "date": "2026-10-01",
+  "title": "Painel ajustado para telas menores",
+  "status": "approved",
+  "items": [
+    "Corrigido: em notebooks e telas menores (como 15\", 1366×768) o painel ficava cortado à direita, escondendo o roteiro, o botão \"Abrir Projeção\" e o volume. Agora tudo cabe na tela.",
+    "A barra do topo se adapta ao espaço disponível: em telas menores, alguns botões mostram só o ícone — passe o mouse por cima pra ver o nome.",
+    "Em telas mais baixas, as barras de cima e de baixo ficam mais finas, sobrando mais espaço pra lista e pra letra."
+  ]
+}

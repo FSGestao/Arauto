@@ -790,6 +790,10 @@ textarea.input-field {
 .cockpit {
   display: grid;
   grid-template-rows: auto 1fr auto;
+  /* minmax(0, 1fr): a coluna única nunca cresce além da janela por causa do
+     conteúdo — sem isso, uma toolbar larga empurrava o painel todo pra fora
+     da tela (cortando roteiro, botões e dock) em notebooks de 1366px. */
+  grid-template-columns: minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
   background: var(--bg-deep);
@@ -811,6 +815,12 @@ body.setup-drawer-open .cockpit {
   gap: 16px;
   padding: 17px 24px;
   flex-shrink: 0;
+  min-width: 0;
+  /* A toolbar se compacta pela própria largura (ver "Toolbar responsiva"),
+     não pela da janela: com a gaveta de configuração aberta ela encolhe
+     mesmo num monitor grande. */
+  container-type: inline-size;
+  container-name: toolbar;
 }
 
 .toolbar-logo {
@@ -1003,6 +1013,8 @@ body.setup-drawer-open .cockpit {
 .cockpit-library {
   padding: 16px;
   gap: 14px;
+  container-type: inline-size;
+  container-name: library;
 }
 
 .library-filter {
@@ -1210,7 +1222,7 @@ body.setup-drawer-open .cockpit {
 /* ─── Letras no painel de detalhe (com timestamp) ────── */
 .lyric-row {
   display: grid;
-  grid-template-columns: 76px 1fr;
+  grid-template-columns: 76px minmax(0, 1fr);
   gap: 16px;
   padding: 5px 12px;
   border-radius: 8px;
@@ -1233,6 +1245,7 @@ body.setup-drawer-open .cockpit {
   font-size: 0.94rem;
   line-height: 1.6;
   color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 .lyric-row.current .lyric-text {
   color: var(--text-primary);
@@ -2658,9 +2671,62 @@ tr:hover {
 .roteiro-backdrop { display: none; }
 
 @media (max-width: 1500px) {
-  .cockpit-body { grid-template-columns: 1fr 340px; }
+  .cockpit-body { grid-template-columns: minmax(0, 1fr) 340px; }
   .library-split { grid-template-columns: minmax(0, 340px) minmax(0, 1fr); }
   .toolbar-search { flex-basis: 320px; }
+}
+
+/* ─── Toolbar responsiva ─────────────────────────────────
+   Cheia, a toolbar pede ~1500px. Abaixo disso ela vai abrindo mão do que é
+   só texto, na ordem do que menos faz falta: o nome da marca, o rótulo dos
+   indicadores (vira uma coluna compacta), o texto de "Abrir Projeção" e por
+   fim o texto dos filtros. Os ícones e os títulos (hover) ficam sempre. */
+@container toolbar (max-width: 1450px) {
+  .toolbar-brand { display: none; }
+  .toolbar-filters { gap: 8px; }
+  .filter-tab { padding: 11px 14px; }
+  .toolbar-actions { gap: 8px; }
+  .toolbar-connections {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    padding: 0;
+  }
+  .conn-item { font-size: 0.68rem; }
+}
+@container toolbar (max-width: 1240px) {
+  .toolbar-cta { padding: 13px 14px; }
+  .toolbar-cta span { display: none; }
+}
+@container toolbar (max-width: 1150px) {
+  .filter-tab { padding: 11px 13px; }
+  .filter-tab .filter-label { display: none; }
+}
+@container toolbar (max-width: 900px) {
+  .toolbar-connections { display: none; }
+}
+
+/* Biblioteca apertada (notebook com a gaveta de configuração aberta): a
+   lista abre mão da largura fixa e divide o espaço com a letra. */
+@container library (max-width: 760px) {
+  .library-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+
+/* Telas baixas (notebooks de 768px de altura): menos respiro vertical
+   na toolbar e na dock, pra sobrar altura pra lista e pra letra. */
+@media (max-height: 820px) {
+  .cockpit { gap: 8px; padding-bottom: 8px; }
+  .cockpit-toolbar { padding-top: 10px; padding-bottom: 10px; }
+  .toolbar-icon-btn { width: 42px; height: 42px; }
+  .filter-tab { padding-top: 10px; padding-bottom: 10px; }
+  .toolbar-search input { padding-top: 10px; padding-bottom: 10px; }
+  .toolbar-cta { padding-top: 11px; padding-bottom: 11px; }
+  .cockpit-dock { padding: 10px 18px; }
+  .dock-preview { width: 136px; height: 76.5px; }
+  .dock-preview iframe { transform: scale(0.0708); }
+  .dock-nowplaying { font-size: 1.1rem; }
+  .dock-controls { margin-top: 4px; }
+  .dock-right { gap: 8px; }
 }
 
 @media (max-width: 1200px) {
@@ -2693,17 +2759,12 @@ tr:hover {
     z-index: 150;
     background: rgba(0, 0, 0, 0.5);
   }
-
-  .toolbar-brand { display: none; }
 }
 
 @media (max-width: 980px) {
   /* Sem espaço para a letra ao lado: a lista ocupa o card inteiro. */
   .library-split { grid-template-columns: minmax(0, 1fr); }
   .library-detail { display: none; }
-  .filter-tab { padding: 12px 14px; }
-  .filter-tab .filter-label { display: none; }
-  .toolbar-connections { display: none; }
 }
 
 @media (max-width: 760px) {
@@ -2720,7 +2781,6 @@ tr:hover {
   .dock-preview { display: none; }
   .dock-right { flex-direction: row; align-items: center; gap: 18px; width: 100%; justify-content: center; }
   .dock-controls { flex-wrap: wrap; justify-content: center; }
-  .toolbar-cta span { display: none; }
 
   .grid-2 { grid-template-columns: 1fr; }
 }

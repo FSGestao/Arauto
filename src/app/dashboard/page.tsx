@@ -1003,9 +1003,9 @@ export default function DashboardPage() {
             <button className="toolbar-icon-btn" onClick={() => setShowSettingsModal(true)} title="Configurações">
               <Icon name="settings" />
             </button>
-            <button className="toolbar-cta" onClick={openProjectionWindow}>
+            <button className="toolbar-cta" onClick={openProjectionWindow} title="Abrir Projeção">
               <Icon name="projection" />
-              Abrir Projeção
+              <span>Abrir Projeção</span>
             </button>
           </div>
         </header>

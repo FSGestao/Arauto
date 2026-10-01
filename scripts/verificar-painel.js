@@ -917,6 +917,24 @@ async function run() {
   });
 
   /* ═══ 18. Tela estreita ═══ */
+  await check("18.0", "em notebook de 1366×768 o painel cabe inteiro", async () => {
+    await painel.ev("window.__fecharModais();");
+    await painel.send("Emulation.setDeviceMetricsOverride", { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
+    await sleep(800);
+    const medida = await painel.ev(`
+      const tb = document.querySelector('.cockpit-toolbar');
+      const partes = ['.cockpit-toolbar', '.cockpit-roteiro', '.cockpit-dock', '.toolbar-cta'];
+      return { rolagem: document.documentElement.scrollWidth > innerWidth + 2,
+               toolbarEstoura: tb.scrollWidth > tb.clientWidth + 2,
+               fora: partes.filter(s => document.querySelector(s).getBoundingClientRect().right > innerWidth + 2),
+               dockVisivel: document.querySelector('.cockpit-dock').getBoundingClientRect().bottom <= innerHeight + 2 };`);
+    assert(!medida.rolagem, "apareceu barra de rolagem horizontal");
+    assert(!medida.toolbarEstoura, "a toolbar não coube na largura da janela");
+    assert(medida.fora.length === 0, "passando da borda direita: " + medida.fora.join(", "));
+    assert(medida.dockVisivel, "a dock ficou abaixo da borda da tela");
+    return "toolbar, roteiro e dock dentro da tela";
+  });
+
   await check("18.1", "abaixo de 1200px o roteiro vira gaveta", async () => {
     await painel.ev("window.__fecharModais();");
     // A gaveta desliza por transição CSS, e o navegador congela animações de
